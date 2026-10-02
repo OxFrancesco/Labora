@@ -59,4 +59,16 @@ The final character revision uses smaller, shallow, closely spaced eyes and soft
 
 `artifacts/routines-backend-e2e/result.json` covers 12 routine checks with real Pi processes; `artifacts/enrollment-e2e/result.json` covers 11 companion/authority checks. `artifacts/model-runtime-e2e/result.json` verifies 16 simultaneous real Pi runtimes use one complete private device identity. None sends an inference request.
 
-On-device voice is bundled and runtime verification confirms its permission owner is `org.buddytools.Labora`. No microphone recording was performed. The fresh ChatGPT headless callback remains pending, and no successful model turn is claimed.
+On-device voice is bundled and runtime verification confirms its permission owner is `org.buddytools.Labora`. No microphone recording was performed.
+
+## Hydra ChatGPT and activity animations
+
+A fresh bot-specific Labora registration completed ChatGPT headless authorization through Helium with the Hydra account. The earlier workspace-scoped registration remains separate. The local Hydra bot answered a real arithmetic request with `437`, then selected Executor through codemode and made three successful documentation calls. `evidence/hydra-chatgpt-20261002/inference.json` records redacted model and integration evidence. No API key or first-party client ID was substituted.
+
+`evidence/live-chatgpt-source-2026-10-02T16-16-43-176Z/result.json` records seven passing checks with the production native composer, companion, Pi worker, and real ChatGPT subscription. Text painted before completion, the deltas exactly reconstructed the final saved reply, Stop cancelled another real response, and a restarted app painted the saved transcript. Screenshots and recordings accompany the result. Computer capture/control was disabled.
+
+`evidence/activity-source-2026-10-02T16-23-56-100Z/result.json` records 17 passing native checks using an isolated local provider fixture. Pixel comparisons prove the actual Metal-rendered Details character moves during idle, thinking, writing, and tool use. Approval, decline, failure, completion, and cancellation display their actual states. Two Unicode deltas painted before completion and persisted once. Approval ran a harmless tool; decline prevented its requested file write. These fixture checks do not claim additional live inference.
+
+`artifacts/streaming-e2e/result.json` records nine production HTTP/Pi checks for replay, offsets, reconnect, independent tools, approvals, and terminal states. Direct process checks prove polling dormant bots does not start Pi workers. `artifacts/avatar-motion/result.json` covers all ten native poses and blinking on all six real USDZ models.
+
+Reduce Motion and inactive-app handling are implemented but were not verified by changing global system preferences. ChatGPT authorization and model use in the Cloudflare bot remain separate and unverified; the successful Hydra runs are local.

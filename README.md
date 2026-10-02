@@ -54,13 +54,17 @@ On macOS, grant Screen Recording and Accessibility to **Labora Computer** from i
 
 Create a bot on a connected computer, then open **Connect apps**. ChatGPT uses the new subscription sign-in flow. Executor uses the bot's own OAuth connection to `https://executor.sh/labora/mcp`. `LABORA_EXECUTOR_URL` changes the endpoint for another organization; `LABORA_OPENAI_MODEL` selects the model, defaulting to `gpt-5.5`.
 
-The agent streams its messages and tool activity to the client. Executor operations requiring approval pause for a user decision. Files created in the bot's workspace appear in Library. Desktop control has explicit user/agent ownership and rejects input using stale frames or a different display.
+The agent streams its messages and tool activity to the client. Characters show thinking, writing, tool use, approval waiting, retrying, completion, failure, cancellation, and reconnecting. Idle characters breathe and blink in Details. macOS Reduce Motion keeps distinct static poses, and background windows stop repeating animation frames. Background bot status does not start an idle Pi process.
+
+Executor operations requiring approval pause for a user decision. Files created in the bot's workspace appear in Library. Desktop control has explicit user/agent ownership and rejects input using stale frames or a different display.
 
 Routines start paused and support a one-time date or recurring schedule. Each routine uses a separate Pi conversation, with its own results and approvals. The companion must be running when a routine is due. Missed runs are recorded without automatic replay. These conversations share the bot's host permissions and are not separate OS sandboxes.
 
 Settings saves sidebar, details-panel and dictation-language preferences. On macOS 14 or later, the microphone button offers on-device dictation when the selected language is available. You review the transcript before inserting it into the draft; it is never sent automatically.
 
 For a headless ChatGPT sign-in, use `bun run agent login --headless`. Open the printed authorization link in your browser on the same machine, or follow the hidden callback-input prompt. This is Labora's own application authorization and remains subject to OpenAI account eligibility.
+
+Each bot keeps its own application registration. To connect a different ChatGPT account or workspace, create a separate bot instead of reusing another account's registration. A fresh Hydra bot successfully authenticated on 2026-10-02, answered through GPT-5.5, and selected Executor documentation tools through Pi code mode. The native client also passed real streaming, Stop, and transcript-restart checks. These local results do not authenticate a separate Cloudflare-hosted bot.
 
 Personal computers are trusted hosts. Separate bot directories and processes do not sandbox terminal access to that host. Cloudflare desktops instead run in their own containers. See [Cloudflare setup](cloud/README.md) and the [subscription eligibility findings](research/pi-chatgpt.md) before offering a shared hosted service.
 

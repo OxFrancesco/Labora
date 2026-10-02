@@ -167,6 +167,8 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
 
     if (!id) return response({ error: { code: "not_found", message: "Unknown agent route" } }, 404);
 
+    if (route === "activity" && request.method === "GET") return response(yield* host.activity(id));
+
     if (route === "messages" || route === "events" || route === "cancel") {
       const routines = yield* Routines.Service;
       yield* routines.conversation(id, conversationId);
@@ -245,7 +247,7 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
       );
 
       if (!Number.isSafeInteger(cursor) || cursor < 0) return yield* Effect.fail(invalid());
-      const events = yield* host.events(id, cursor, conversationId);
+      const events = yield* host.events(id, cursor, url.searchParams.get("scope") === "bot" ? null : conversationId);
 
       const heartbeat = Stream.tick("15 seconds").pipe(
         Stream.map(() => new TextEncoder().encode(": keep-alive\n\n")),
@@ -255,7 +257,7 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
         Stream.map((event) =>
           new TextEncoder().encode(`id: ${event.sequence}\ndata: ${JSON.stringify(event)}\n\n`),
         ),
-        Stream.merge(heartbeat),
+        Stream.merge(heartbeat, { haltStrategy: "left" }),
       );
 
       return new Response(Stream.toReadableStream(bytes), {

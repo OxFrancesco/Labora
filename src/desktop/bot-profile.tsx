@@ -35,7 +35,7 @@ export function BotProfile({ labora }: { labora: Labora }) {
         onClick={() => setEditing(editing === "color" ? "none" : "color")}
         style={{ width: 88, height: 88 }}
       >
-        <Avatar tint={bot.color} size={80} onClick={() => setEditing(editing === "color" ? "none" : "color")} />
+        <Avatar key={labora.selected?.key} tint={bot.color} size={80} activity={labora.botActivity.phase} activityKey={labora.botActivity.runId} onClick={() => setEditing(editing === "color" ? "none" : "color")} />
       </Button>
       {editing === "color" ? (
         <CharacterPicker

@@ -9,16 +9,28 @@ struct RenderRequest: Decodable {
     let height: Int
     let yaw: Double
     let pitch: Double
+    let roll: Double?
+    let lift: Double?
+    let stretch: Double?
+    let eyeOpen: Double?
+}
+
+struct RequestEnvelope: Decodable {
+    let id: Int
+    let kind: String?
 }
 
 struct RenderResponse: Encodable {
     var id: Int
+    var kind: String?
     var width: Int?
     var height: Int?
     var pixels: String?
     var nodes: Int?
     var materials: [String]?
     var error: String?
+    var reducedMotion: Bool?
+    var applicationActive: Bool?
 }
 
 struct RenderFailure: Error, LocalizedError {
@@ -31,6 +43,8 @@ final class AvatarScene {
     let pivot = SCNNode()
     let nodes: Int
     let materials: [String]
+    private var eyes: [(node: SCNNode, scale: SCNVector3)] = []
+    private var catchlights: [SCNNode] = []
 
     init(path: String, device: MTLDevice) throws {
         let url = URL(fileURLWithPath: path)
@@ -54,7 +68,15 @@ final class AvatarScene {
         )
         var nodeCount = 0
         var materialNames = Set<String>()
+        var importedEyes: [(node: SCNNode, scale: SCNVector3)] = []
+        var importedCatchlights: [SCNNode] = []
         model.enumerateChildNodes { node, _ in
+            if node.name == "Eye_L" || node.name == "Eye_R" {
+                importedEyes.append((node, node.scale))
+            }
+            if node.name == "Catchlight_L" || node.name == "Catchlight_R" {
+                importedCatchlights.append(node)
+            }
             if let geometry = node.geometry {
                 nodeCount += 1
                 for material in geometry.materials {
@@ -72,6 +94,8 @@ final class AvatarScene {
         }
         nodes = nodeCount
         materials = materialNames.sorted()
+        eyes = importedEyes
+        catchlights = importedCatchlights
         guard nodes > 0 else { throw RenderFailure(message: "The avatar model has no mesh nodes.") }
         pivot.addChildNode(model)
         scene.rootNode.addChildNode(pivot)
@@ -132,7 +156,15 @@ final class AvatarScene {
     }
 
     func render(_ request: RenderRequest) throws -> Data {
-        pivot.eulerAngles = SCNVector3(request.pitch, request.yaw, 0)
+        let stretch = request.stretch ?? 1
+        let open = request.eyeOpen ?? 1
+        pivot.eulerAngles = SCNVector3(request.pitch, request.yaw, request.roll ?? 0)
+        pivot.position.y = CGFloat(request.lift ?? 0)
+        pivot.scale = SCNVector3(1 / sqrt(stretch), stretch, 1 / sqrt(stretch))
+        for eye in eyes {
+            eye.node.scale = SCNVector3(eye.scale.x, eye.scale.y, eye.scale.z * CGFloat(open))
+        }
+        for catchlight in catchlights { catchlight.isHidden = open < 0.75 }
         let image = renderer.snapshot(atTime: 0, with: CGSize(width: request.width, height: request.height), antialiasingMode: .multisampling4X)
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw RenderFailure(message: "SceneKit did not produce a rendered frame.")
@@ -170,23 +202,38 @@ while let line = readLine() {
     autoreleasepool {
         var response = RenderResponse(id: 0)
         do {
-            let request = try decoder.decode(RenderRequest.self, from: Data(line.utf8))
-            response.id = request.id
-            guard let device else { throw RenderFailure(message: "A Metal device is required to render 3D avatars.") }
-            guard (16...512).contains(request.width), (16...512).contains(request.height), request.yaw.isFinite, request.pitch.isFinite else {
-                throw RenderFailure(message: "Invalid avatar frame dimensions or camera angle.")
+            let data = Data(line.utf8)
+            let envelope = try decoder.decode(RequestEnvelope.self, from: data)
+            response.id = envelope.id
+            if envelope.kind == "environment" {
+                RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.001))
+                response.kind = "environment"
+                response.reducedMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                response.applicationActive = NSRunningApplication(processIdentifier: getppid())?.isActive ?? true
+            } else {
+                let request = try decoder.decode(RenderRequest.self, from: data)
+                guard let device else { throw RenderFailure(message: "A Metal device is required to render 3D avatars.") }
+                guard (16...512).contains(request.width), (16...512).contains(request.height),
+                      request.yaw.isFinite, request.pitch.isFinite,
+                      (request.roll ?? 0).isFinite, abs(request.roll ?? 0) <= 1,
+                      (request.lift ?? 0).isFinite, abs(request.lift ?? 0) <= 0.3,
+                      (0.8...1.2).contains(request.stretch ?? 1),
+                      (0.05...1.2).contains(request.eyeOpen ?? 1) else {
+                    throw RenderFailure(message: "Invalid avatar frame dimensions or camera angle.")
+                }
+                let scene: AvatarScene
+                if let cached = scenes[request.model] { scene = cached }
+                else {
+                    scene = try AvatarScene(path: request.model, device: device)
+                    scenes[request.model] = scene
+                }
+                response.width = request.width
+                response.kind = "frame"
+                response.height = request.height
+                response.pixels = try scene.render(request).base64EncodedString()
+                response.nodes = scene.nodes
+                response.materials = scene.materials
             }
-            let scene: AvatarScene
-            if let cached = scenes[request.model] { scene = cached }
-            else {
-                scene = try AvatarScene(path: request.model, device: device)
-                scenes[request.model] = scene
-            }
-            response.width = request.width
-            response.height = request.height
-            response.pixels = try scene.render(request).base64EncodedString()
-            response.nodes = scene.nodes
-            response.materials = scene.materials
         } catch { response.error = error.localizedDescription }
         do {
             var bytes = try encoder.encode(response)

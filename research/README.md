@@ -29,7 +29,7 @@ Labora embedded Pi session
   -> cloudflare_docs.user.publicDocs.search_cloudflare_documentation
 ```
 
-The query `Cloudflare Sandbox SDK run Pi coding agent` returned five results, including the official Pi recipe. This proves the embedded MCP connection and upstream read. The diagnostic selected the call directly; an LLM did not choose it. ChatGPT inference and the normal Pi codemode conversation path remain unverified.
+The query `Cloudflare Sandbox SDK run Pi coding agent` returned five results, including the official Pi recipe. That diagnostic selected the call directly. A later Hydra bot run used a real GPT-5.5 response to select three Executor execute calls through Pi code mode and returned Cloudflare documentation titles and URLs. The local bot's model-to-integration path is now verified.
 
 Run commands are in the [project README](../README.md).
 
@@ -41,7 +41,7 @@ The GPUix app and Effect backend are implemented. Source and packaged native wal
 
 Primary-source findings are in [Pi and ChatGPT](pi-chatgpt.md), [Cloudflare and Kitesurf](cloudflare-kitesurf.md), and [Executor](executor.md). Pi source is available through codeview at `resources/pi`, refreshed to `b271b0a524b29e13c0c9e748aea0d34e1597f2db`. Release claims were checked against v1.0.0.
 
-The documented personal self-hosting architecture is a Worker and per-bot Durable Object managing a Linux Sandbox running Pi, with explicit workspace persistence. Pi 1.0 includes a ChatGPT subscription sign-in flow. Actual request encoding, account lifecycle, and inference still need verification in Labora. A service offered to other users has different OpenAI eligibility from personal self-hosting.
+The documented personal self-hosting architecture is a Worker and per-bot Durable Object managing a Linux Sandbox running Pi, with explicit workspace persistence. Pi 1.0 includes a ChatGPT subscription sign-in flow. A fresh Hydra bot registration and local inference succeeded in Labora. Eligibility remains specific to the account, plan, workspace, and application registration. The separately hosted Cloudflare bot has not been authenticated to ChatGPT.
 
 Kitesurf runs on Workers but does not currently provide persistent authenticated sessions or live viewing. Chromium is needed for those functions. Kitesurf's source release is forthcoming; do not describe that dependency as released open source.
 
@@ -53,4 +53,4 @@ The native implementation follows this reference. Full 1:1 parity has not been e
 
 ## Remaining work
 
-Authenticate the bot to ChatGPT and verify a conversation that uses Executor through Pi codemode. Verify a real microphone transcript and browser enrollment on a personal tailnet. Complete group chats and the remaining Grok Bot settings behavior. Packaged native verification and Cloudflare deployment, control, and persistence checks have passed; they do not establish model inference or full feature parity.
+Verify ChatGPT inference in the separate Cloudflare-hosted bot, a real microphone transcript, and browser enrollment on a personal tailnet. Complete group chats and the remaining Grok Bot settings behavior. Local Hydra inference and model-selected Executor reads are verified, alongside native streaming and cancellation. These checks do not establish full Grok Bot feature parity.

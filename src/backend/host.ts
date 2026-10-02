@@ -13,6 +13,8 @@ import { join, resolve, sep, basename } from "node:path";
 import { Config, Context, Effect, Layer, PubSub, Result, Schema, Scope, Semaphore, Stream } from "effect";
 import lockfile from "proper-lockfile";
 import type { Subprocess } from "bun";
+import { idleActivity, reduceActivity } from "./activity";
+import type { BotActivity } from "./contracts";
 import { ActionsRequest, type Computer, type Frame } from "../computer/contracts";
 import {
   AgentEvent,
@@ -45,6 +47,7 @@ export interface HostOptions {
 }
 
 interface Pending {
+  readonly conversationId: string;
   readonly resolve: (value: Reply) => void;
   readonly reject: (error: BackendError) => void;
   readonly timer: ReturnType<typeof setTimeout>;
@@ -53,6 +56,10 @@ interface Pending {
 interface Reply {
   readonly value: Schema.Schema.Type<typeof Schema.Json>;
   readonly cursor: number;
+  readonly busy: boolean;
+  readonly activity: BotActivity;
+  readonly botActivity: BotActivity;
+  readonly interactive: readonly EventPayload[];
 }
 
 interface Worker {
@@ -66,6 +73,8 @@ interface Worker {
     readonly payload: EventPayload;
     readonly conversationId: string;
   }>;
+  readonly conversationActivities: Map<string, BotActivity>;
+  botActivity: BotActivity;
   activeConversationId: string;
   activeRunId: string | undefined;
   sequence: number;
@@ -91,11 +100,12 @@ export interface Interface {
     readonly events: Stream.Stream<AgentEvent>;
   }, BackendError>;
   readonly snapshot: (id: string, conversationId?: string) => Effect.Effect<MessageSnapshot, BackendError>;
+  readonly activity: (id: string) => Effect.Effect<BotActivity, BackendError>;
   readonly forgetConversation: (id: string, conversationId: string) => Effect.Effect<void, BackendError>;
   readonly events: (
     id: string,
     cursor: number,
-    conversationId?: string,
+    conversationId?: string | null,
   ) => Effect.Effect<Stream.Stream<AgentEvent>, BackendError>;
 }
 
@@ -210,6 +220,21 @@ export const layer = (options: HostOptions) =>
                 payload,
                 conversationId: conversationId ?? "direct",
               });
+
+              if (isConversationEvent(payload)) {
+                const key = conversationId ?? "direct";
+                worker.conversationActivities.set(key, reduceActivity(worker.conversationActivities.get(key) ?? idleActivity(), payload));
+                worker.botActivity = reduceActivity(worker.botActivity, payload);
+              }
+
+              if (EventPayload.isAnyOf(["ProcessExited"])(payload)) {
+                if (["thinking", "streaming", "working", "waiting", "retrying"].includes(worker.botActivity.phase))
+                  worker.botActivity = reduceActivity(worker.botActivity, payload);
+
+                for (const [key, activity] of worker.conversationActivities)
+                  if (["thinking", "streaming", "working", "waiting", "retrying"].includes(activity.phase))
+                    worker.conversationActivities.set(key, reduceActivity(activity, payload));
+              }
 
               yield* filesystem("Persist agent event", () =>
                 appendFile(join(botsDir, id, "events.jsonl"), `${JSON.stringify(event)}\n`, {
@@ -361,7 +386,17 @@ export const layer = (options: HostOptions) =>
               if (!pending) return;
               clearTimeout(pending.timer);
               worker.pending.delete(response.id);
-              pending.resolve({ value: response.value, cursor: worker.sequence });
+              const conversationId = pending.conversationId;
+              pending.resolve({
+                value: response.value,
+                cursor: worker.sequence,
+                busy: !worker.exited && worker.activity.has("run") && worker.activeConversationId === conversationId,
+                activity: worker.conversationActivities.get(conversationId) ?? idleActivity(),
+                botActivity: worker.botActivity,
+                interactive: [...worker.interactive.values()].flatMap((item) =>
+                  (!isConversationEvent(item.payload) && conversationId === "direct") || item.conversationId === conversationId
+                    ? [item.payload] : []),
+              });
             }),
           Failure: (failure) =>
             Effect.sync(() => {
@@ -465,6 +500,27 @@ export const layer = (options: HostOptions) =>
           },
         });
 
+        const conversationActivities = new Map<string, BotActivity>();
+        let botActivity = idleActivity();
+
+        for (const event of events) {
+          if (!isConversationEvent(event.payload)) continue;
+          const key = event.conversationId ?? "direct";
+          conversationActivities.set(key, reduceActivity(conversationActivities.get(key) ?? idleActivity(), event.payload));
+          botActivity = reduceActivity(botActivity, event.payload);
+        }
+
+        for (const [key, activity] of conversationActivities)
+          if (["thinking", "streaming", "working", "waiting", "retrying"].includes(activity.phase))
+            conversationActivities.set(key, reduceActivity(activity, EventPayload.cases.ProcessExited.make({
+              message: "The agent restarted before this run finished.",
+            })));
+
+        if (["thinking", "streaming", "working", "waiting", "retrying"].includes(botActivity.phase))
+          botActivity = reduceActivity(botActivity, EventPayload.cases.ProcessExited.make({
+            message: "The agent restarted before this run finished.",
+          }));
+
         const worker: Worker = {
           child,
           pending: new Map(),
@@ -473,6 +529,8 @@ export const layer = (options: HostOptions) =>
           publishing,
           activity: new Set(),
           interactive: new Map(),
+          conversationActivities,
+          botActivity,
           activeConversationId: "direct",
           activeRunId: undefined,
           sequence,
@@ -647,7 +705,10 @@ export const layer = (options: HostOptions) =>
                 );
               }, 30_000);
 
-              worker.pending.set(requestId, { resolve, reject, timer });
+              worker.pending.set(requestId, {
+                resolve, reject, timer,
+                conversationId: ChildCommand.isAnyOf(["Messages"])(command) ? command.conversationId ?? "direct" : "direct",
+              });
               worker.child.stdin.write(
                 `${JSON.stringify(ChildRequest.make({ id: requestId, command: outgoing }))}\n`,
               );
@@ -682,31 +743,37 @@ export const layer = (options: HostOptions) =>
         conversationId = "direct",
       ) {
         const reply = yield* requestReply(id, ChildCommand.cases.Messages.make({ conversationId }));
-        const worker = workers.get(id);
 
         return yield* Schema.decodeUnknownEffect(MessageSnapshot)({
           messages: reply.value,
           cursor: reply.cursor,
-          busy: Boolean(worker && !worker.exited && worker.activity.size > 0 &&
-            (worker.activity.has("auth") || worker.activeConversationId === conversationId)),
-          pending: worker && !worker.exited
-            ? [...worker.interactive.values()].flatMap((item) =>
-                (!isConversationEvent(item.payload) && conversationId === "direct") || item.conversationId === conversationId
-                  ? [item.payload]
-                  : [])
-            : [],
+          busy: reply.busy,
+          pending: reply.interactive,
+          activity: reply.activity,
+          botActivity: reply.botActivity,
         }).pipe(Effect.mapError(() => schemaError("Invalid worker message snapshot")));
+      });
+
+      const activity = Effect.fn("AgentHost.activity")(function* (id: string) {
+        yield* getBot(id);
+
+        return workers.get(id)?.botActivity ?? idleActivity();
       });
 
       const workerEvents = (
         worker: Worker,
         cursor: number,
-        conversationId: string,
+        conversationId: string | null,
       ) => Stream.unwrap(
           Effect.gen(function* () {
             const queue = yield* PubSub.subscribe(worker.bus);
+            const first = worker.events[0]?.sequence;
+
+            if (first !== undefined && cursor > 0 && cursor < first - 1)
+              return yield* Effect.die(new Error("The event cursor expired. Reload the conversation snapshot."));
             const replay = worker.events.filter((event) => event.sequence > cursor);
             const through = replay.at(-1)?.sequence ?? cursor;
+            let previous = cursor;
 
             return Stream.fromIterable(replay).pipe(
               Stream.concat(
@@ -714,8 +781,16 @@ export const layer = (options: HostOptions) =>
                   Stream.filter((event) => event.sequence > through),
                 ),
               ),
-              Stream.filter((event) => !isConversationEvent(event.payload) ||
+              Stream.mapEffect((event) => {
+                if (previous > 0 && event.sequence !== previous + 1)
+                  return Effect.die(new Error("The agent stream lost an update. Reload the conversation snapshot."));
+                previous = event.sequence;
+
+                return Effect.succeed(event);
+              }),
+              Stream.filter((event) => conversationId === null || !isConversationEvent(event.payload) ||
                 (event.conversationId ?? "direct") === conversationId),
+              Stream.takeUntil((event) => worker.exited && EventPayload.isAnyOf(["ProcessExited"])(event.payload)),
             );
           }),
         );
@@ -737,7 +812,7 @@ export const layer = (options: HostOptions) =>
       const events = Effect.fn("AgentHost.events")(function* (
         id: string,
         cursor: number,
-        conversationId = "direct",
+        conversationId: string | null = "direct",
       ) {
         const worker = yield* ensureWorker(id);
         const earliest = worker.events[0]?.sequence ?? 0;
@@ -928,7 +1003,7 @@ export const layer = (options: HostOptions) =>
         return yield* filesystem("Read workspace file", () => readFile(resolved));
       });
 
-      return Service.of({ isBusy, list, create, update, files, file, request, startRun, snapshot, forgetConversation, events });
+      return Service.of({ isBusy, list, create, update, files, file, request, startRun, snapshot, activity, forgetConversation, events });
     }),
   );
 

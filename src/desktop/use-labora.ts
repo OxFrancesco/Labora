@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basename, join } from "node:path";
 import { copyFile, mkdir } from "node:fs/promises";
-import { EventPayload } from "../backend/contracts";
+import { EventPayload, isConversationEvent } from "../backend/contracts";
+import type { BotActivity } from "../backend/contracts";
+import { idleActivity, reduceActivity } from "../backend/activity";
+import { reduceMessages } from "./conversation-state";
 import type {
   AgentEvent,
   AuthStatus,
@@ -41,6 +44,7 @@ export function useLabora(store: DesktopStore) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState("");
+  const [botActivities, setBotActivities] = useState<ReadonlyMap<string, BotActivity>>(new Map());
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const approval = approvals[0];
   const [auth, setAuth] = useState<AuthStatus | null>(null);
@@ -125,29 +129,22 @@ export function useLabora(store: DesktopStore) {
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     const client = computerClient(selected.connection);
 
-    const upsert = (message: Message) =>
-      setMessages((current) => {
-        const index = current.findIndex((item) => item.id === message.id);
+    let streamedMessages: readonly Message[] = [];
+    let botActivity = idleActivity();
 
-        return index < 0
-          ? [...current, message]
-          : current.map((item) => (item.id === message.id ? message : item));
-      });
+    const updateActivity = (next: BotActivity) => {
+      botActivity = next;
+      setBotActivities((current) => new Map(current).set(selected.key, next));
+    };
 
     const apply = (payload: EventPayload, timestamp: string) => {
+      streamedMessages = reduceMessages(streamedMessages, payload, timestamp);
+      setMessages(streamedMessages);
       EventPayload.match(payload, {
         Ready: () => undefined,
-        Message: ({ message }) => upsert(message),
-        TextDelta: ({ messageId, text }) =>
-          setMessages((current) => {
-            const exists = current.some((item) => item.id === messageId);
-
-            return exists
-              ? current.map((item) =>
-                  item.id === messageId ? { ...item, text: item.text + text } : item,
-                )
-              : [...current, { id: messageId, text, role: "assistant", createdAt: timestamp }];
-          }),
+        Message: () => undefined,
+        TextDelta: () => undefined,
+        RunActivity: () => undefined,
         RunStarted: () => {
           setBusy(true);
           setError("");
@@ -165,8 +162,8 @@ export function useLabora(store: DesktopStore) {
           setActivity("");
           setError(message);
         },
-        ToolStart: ({ name }) => setActivity(name),
-        ToolEnd: () => setActivity(""),
+        ToolStart: () => undefined,
+        ToolEnd: () => undefined,
         AuthLink: ({ url, provider }) => {
           setAuthLink(url);
           setAuth((current) => (current ? { ...current, active: provider } : current));
@@ -215,9 +212,11 @@ export function useLabora(store: DesktopStore) {
       const history = await client.messages(selected.bot.id);
 
       if (controller.signal.aborted) return;
-      setMessages(history.messages);
+      streamedMessages = history.messages;
+      setMessages(streamedMessages);
       setBusy(history.busy);
-      setActivity("");
+      updateActivity(history.botActivity ?? history.activity ?? (history.busy ? { ...idleActivity(), phase: "thinking" } : idleActivity()));
+      setActivity((history.activity?.tools ?? []).map((tool) => tool.name).join(", "));
       setApprovals([]);
       setAuthLink("");
       setAuthQuestion(null);
@@ -229,12 +228,21 @@ export function useLabora(store: DesktopStore) {
       if (controller.signal.aborted) return;
 
       if (authVersions.current.get(selected.key) === authVersion) setAuth(status);
+      setError(history.activity?.phase === "failed" ? history.activity.message ?? "The run failed." : "");
       let cursor = history.cursor;
       await client.events(selected.bot.id, cursor, controller.signal, (event: AgentEvent) => {
         if (controller.signal.aborted || event.sequence <= cursor) return;
+
+        if (event.botId !== selected.bot.id) throw new Error("The computer sent an update for a different bot.");
+        updateActivity(reduceActivity(botActivity, event.payload));
+
+        if (!isConversationEvent(event.payload) || (event.conversationId ?? "direct") === "direct") {
+          apply(event.payload, event.timestamp);
+          setActivity(botActivity.tools.map((tool) => tool.name).join(", "));
+        }
+
         cursor = event.sequence;
-        apply(event.payload, event.timestamp);
-      });
+      }, "bot");
 
       if (!controller.signal.aborted) throw new Error("The connection closed. Reconnecting…");
     };
@@ -242,6 +250,7 @@ export function useLabora(store: DesktopStore) {
     const reconnect = () => {
       void watch().catch((reason: Error) => {
         if (controller.signal.aborted) return;
+        updateActivity({ ...botActivity, phase: "reconnecting", message: reason.message });
         reportError(reason);
         reconnectTimer = setTimeout(reconnect, 3_000);
       });
@@ -254,6 +263,46 @@ export function useLabora(store: DesktopStore) {
       clearTimeout(reconnectTimer);
     };
   }, [selected?.key, selected?.connection.endpoint, selected?.connection.token, reportError]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const visible = new Set(bots.map((item) => item.key));
+    setBotActivities((current) => new Map([...current].filter(([key]) => visible.has(key))));
+
+    for (const bot of bots) {
+      if (bot.key === selected?.key) continue;
+      const client = computerClient(bot.connection);
+      let activity = idleActivity();
+
+      const update = (next: BotActivity) => {
+        if (controller.signal.aborted) return;
+        activity = next;
+        setBotActivities((current) => new Map(current).set(bot.key, next));
+      };
+
+      const poll = async () => {
+        try {
+          update(await client.activity(bot.bot.id, controller.signal));
+        } catch (reason) {
+          update({ ...activity, phase: "reconnecting", message: reason instanceof Error ? reason.message : "Could not read this bot's activity." });
+        } finally {
+          if (!controller.signal.aborted) {
+            const timer = setTimeout(() => { timers.delete(timer); void poll(); }, 3_000);
+            timers.add(timer);
+          }
+        }
+      };
+
+      void poll();
+    }
+
+    return () => {
+      controller.abort();
+
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [bots, selected?.key]);
 
   function changeDraft(next: Draft) {
     setPreferences((current) => ({
@@ -501,6 +550,8 @@ export function useLabora(store: DesktopStore) {
     setError,
     busy,
     activity,
+    botActivities,
+    botActivity: botActivities.get(key) ?? idleActivity(),
     approval,
     auth,
     authLink,

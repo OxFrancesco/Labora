@@ -1,5 +1,5 @@
 import { Effect, Result, Schema } from "effect";
-import { AgentEvent, AuthStatus, Bot, MessageSnapshot, WorkspaceFile } from "../backend/contracts";
+import { AgentEvent, AuthStatus, Bot, BotActivity, MessageSnapshot, WorkspaceFile } from "../backend/contracts";
 import type {
   ApprovalResponse,
   AuthStart,
@@ -150,6 +150,12 @@ export function computerClient(connection: Connection) {
       Schema.decodeUnknownSync(MessageSnapshot)(
         await (await request(`/v1/bots/${id}/messages${conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : ""}`)).json(),
       ),
+    activity: async (id: string, signal: AbortSignal) =>
+      Schema.decodeUnknownSync(BotActivity)(
+        await (await request(`/v1/bots/${id}/activity`, {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+        })).json(),
+      ),
     send: async (id: string, message: SendMessage) =>
       Schema.decodeUnknownSync(Run)(
         await (
@@ -203,31 +209,49 @@ export function computerClient(connection: Connection) {
       cursor: number,
       signal: AbortSignal,
       onEvent: (event: AgentEvent) => void,
+      scope?: "bot",
     ) => {
-      const response = await request(`/v1/bots/${id}/events?cursor=${cursor}`, { signal });
+      const response = await request(`/v1/bots/${id}/events?cursor=${cursor}${scope === "bot" ? "&scope=bot" : ""}`, { signal });
 
       if (!response.body) throw new Error("The agent event stream has no body.");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let pending = "";
+      let lastSequence = cursor;
+
+      const consume = (block: string) => {
+        const lines = block.split(/\r?\n/).flatMap((part) =>
+          part.startsWith("data:") ? [part.slice(5).replace(/^ /, "")] : []);
+
+        if (!lines.length) return;
+        const event = Schema.decodeUnknownSync(Schema.fromJsonString(AgentEvent))(lines.join("\n"));
+
+        if (event.botId !== id) throw new Error("The computer sent an update for a different bot.");
+
+        if (event.sequence <= lastSequence) return;
+        onEvent(event);
+        lastSequence = event.sequence;
+      };
 
       try {
         while (!signal.aborted) {
           const chunk = await reader.read();
 
-          if (chunk.done) return;
+          if (chunk.done) {
+            pending += decoder.decode();
+
+            if (pending.trim()) throw new Error("The agent stream ended during an update. Reconnecting…");
+
+            return;
+          }
+
           pending += decoder.decode(chunk.value, { stream: true });
-          const blocks = pending.split("\n\n");
+
+          if (pending.length > 32_000_000) throw new Error("The agent stream update is too large.");
+          const blocks = pending.split(/\r?\n\r?\n/);
           pending = blocks.pop() ?? "";
 
-          for (const block of blocks) {
-            const line = block.split("\n").find((part) => part.startsWith("data:"));
-
-            if (line)
-              onEvent(
-                Schema.decodeUnknownSync(Schema.fromJsonString(AgentEvent))(line.slice(5).trim()),
-              );
-          }
+          for (const block of blocks) consume(block);
         }
       } finally {
         await reader.cancel();

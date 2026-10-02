@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { Schema } from "effect";
 
 const FrameResponse = Schema.Struct({
+  kind: Schema.Literal("frame"),
   id: Schema.Number,
   width: Schema.Number,
   height: Schema.Number,
@@ -10,10 +11,25 @@ const FrameResponse = Schema.Struct({
   materials: Schema.Array(Schema.String),
 });
 
+const EnvironmentResponse = Schema.Struct({
+  kind: Schema.Literal("environment"),
+  id: Schema.Number,
+  reducedMotion: Schema.Boolean,
+  applicationActive: Schema.Boolean,
+});
+
 const RenderResponse = Schema.fromJsonString(Schema.Union([
   FrameResponse,
+  EnvironmentResponse,
   Schema.Struct({ id: Schema.Number, error: Schema.String }),
 ]));
+
+type HelperResponse = typeof RenderResponse.Type;
+
+export interface AvatarEnvironment {
+  reducedMotion: boolean;
+  applicationActive: boolean;
+}
 
 export interface AvatarFrame {
   width: number;
@@ -29,17 +45,21 @@ export interface AvatarRenderRequest {
   height: number;
   yaw: number;
   pitch: number;
+  roll?: number;
+  lift?: number;
+  stretch?: number;
+  eyeOpen?: number;
 }
 
-interface PendingFrame {
-  resolve: (frame: AvatarFrame) => void;
+interface PendingResponse {
+  resolve: (frame: HelperResponse) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
 }
 
 class NativeAvatarRenderer {
   private sequence = 0;
-  private pending = new Map<number, PendingFrame>();
+  private pending = new Map<number, PendingResponse>();
   private child = Bun.spawn([
     process.env.LABORA_AVATAR_HELPER ?? resolve(import.meta.dir, "../../dist/labora-avatar"),
   ], { stdin: "pipe", stdout: "pipe", stderr: "inherit" });
@@ -81,12 +101,7 @@ class NativeAvatarRenderer {
           this.pending.delete(response.id);
 
           if ("error" in response) request.reject(new Error(response.error));
-          else {
-            const pixels = Buffer.from(response.pixels, "base64");
-
-            if (pixels.length !== response.width * response.height * 4) request.reject(new Error("The 3D renderer returned an incomplete frame."));
-            else request.resolve({ ...response, pixels });
-          }
+          else request.resolve(response);
         }
 
         newline = buffered.indexOf("\n");
@@ -94,12 +109,11 @@ class NativeAvatarRenderer {
     }
   }
 
-  render(options: AvatarRenderRequest): Promise<AvatarFrame> {
+  request(options: AvatarRenderRequest | { kind: "environment" }): Promise<HelperResponse> {
     const id = ++this.sequence;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.child.kill();
         this.fail(new Error("The native 3D renderer timed out."));
       }, 30_000);
 
@@ -120,27 +134,71 @@ class NativeAvatarRenderer {
 
 let active: NativeAvatarRenderer | undefined;
 
-const frames = new Map<string, Promise<AvatarFrame>>();
+interface CachedFrame {
+  frame: Promise<AvatarFrame>;
+  bytes: number;
+}
+
+const frames = new Map<string, CachedFrame>();
+
+const maximumCacheBytes = 24 * 1024 * 1024;
+
+let cacheBytes = 0;
+
+function forgetFrame(key: string) {
+  const entry = frames.get(key);
+
+  if (entry) cacheBytes -= entry.bytes;
+  frames.delete(key);
+}
+
+export async function avatarEnvironment(): Promise<AvatarEnvironment> {
+  active ??= new NativeAvatarRenderer();
+  const response = await active.request({ kind: "environment" });
+
+  if ("error" in response) throw new Error(response.error);
+
+  if (response.kind !== "environment") throw new Error("The 3D renderer returned an invalid environment.");
+
+  return response;
+}
 
 export function renderAvatar(options: AvatarRenderRequest): Promise<AvatarFrame> {
   const key = JSON.stringify(options);
   const previous = frames.get(key);
 
-  if (previous) return previous;
+  if (previous) {
+    frames.delete(key);
+    frames.set(key, previous);
+
+    return previous.frame;
+  }
+
   active ??= new NativeAvatarRenderer();
 
-  const result = active.render(options).catch((error) => {
-    frames.delete(key);
+  const result = active.request(options).then((response) => {
+    if ("error" in response) throw new Error(response.error);
 
+    if (response.kind !== "frame") throw new Error("The 3D renderer returned an invalid frame.");
+    const pixels = Buffer.from(response.pixels, "base64");
+
+    if (pixels.length !== response.width * response.height * 4) throw new Error("The 3D renderer returned an incomplete frame.");
+
+    return { ...response, pixels };
+  }).catch((error) => {
+    forgetFrame(key);
     throw error;
   });
 
-  frames.set(key, result);
+  const bytes = options.width * options.height * 4;
+  frames.set(key, { frame: result, bytes });
+  cacheBytes += bytes;
 
-  if (frames.size > 128) {
+  while (cacheBytes > maximumCacheBytes || frames.size > 256) {
     const oldest = frames.keys().next().value;
 
-    if (oldest) frames.delete(oldest);
+    if (!oldest) break;
+    forgetFrame(oldest);
   }
 
   return result;
@@ -150,4 +208,5 @@ export function closeAvatarRenderer() {
   active?.close();
   active = undefined;
   frames.clear();
+  cacheBytes = 0;
 }

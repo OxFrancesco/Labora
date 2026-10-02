@@ -3,6 +3,7 @@ import type { StyleDesc } from "@gpuix/react";
 import { color, font } from "./theme";
 import { characterForColor, characterModel } from "./avatars";
 import { Avatar3D } from "./avatar-3d";
+import type { AvatarActivity } from "./avatar-motion";
 
 const paths = {
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -44,10 +45,12 @@ export function Icon({ name, size = 20, tint = color.secondary }: IconProps) {
 interface AvatarProps {
   tint: string;
   size?: number;
+  activity?: AvatarActivity;
+  activityKey?: string;
   onClick?: () => void;
 }
 
-export function Avatar({ tint, size = 40, onClick }: AvatarProps) {
+export function Avatar({ tint, size = 40, activity, activityKey, onClick }: AvatarProps) {
   const character = characterForColor(tint);
 
   return (
@@ -56,6 +59,8 @@ export function Avatar({ tint, size = 40, onClick }: AvatarProps) {
       modelPath={characterModel(tint)}
       name={`${character.name}, ${character.material}`}
       size={size}
+      activity={activity}
+      activityKey={activityKey}
       interactive={size >= 72}
       onClick={onClick}
     />

@@ -10,6 +10,7 @@ import { Routines } from "./routines";
 import { ComputerView } from "./computer-view";
 import { Library } from "./library";
 import { BotProfile } from "./bot-profile";
+import { avatarActivityLabels } from "./avatar-motion";
 import { readClipboard } from "./clipboard";
 import { useLabora } from "./use-labora";
 import { useVoiceInput } from "./voice-input";
@@ -191,7 +192,12 @@ export function App({ store }: AppProps) {
                 borderRadius: 12,
               }}
             >
-              <Avatar tint={item.bot.color} size={42} />
+              <Avatar
+                tint={item.bot.color}
+                size={42}
+                activity={labora.botActivities.get(item.key)?.phase}
+                activityKey={labora.botActivities.get(item.key)?.runId}
+              />
               {compact ? null : (
                 <Label style={{ flexShrink: 1, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {item.bot.name}
@@ -278,7 +284,7 @@ export function App({ store }: AppProps) {
               gap: 6,
             }}
           >
-            <Avatar tint={bot?.color ?? "#777777"} size={26} />
+            <Avatar key={selected?.key ?? "new"} tint={bot?.color ?? "#777777"} size={26} activity={labora.botActivity.phase} activityKey={labora.botActivity.runId} />
             <Label>{bot?.name ?? "New chat"}</Label>
           </Button>
           <div style={{ position: "absolute", right: 12, display: "flex", gap: 8 }}>
@@ -310,7 +316,7 @@ export function App({ store }: AppProps) {
                 paddingBottom: 18,
               }}
             >
-              {labora.messages.map((message) => (
+              {labora.messages.map((message) => message.role === "assistant" && !message.text.trim() ? null : (
                 <div
                   key={message.id}
                   style={{
@@ -379,12 +385,10 @@ export function App({ store }: AppProps) {
                   </Button>
                 </div>
               ) : null}
-              {labora.busy ? (
-                <div style={{ paddingTop: 12, paddingBottom: 12 }}>
-                  <Label secondary>
-                    {labora.activity
-                      ? `Using ${labora.activity}`
-                      : `${bot?.name ?? "Bot"} is working`}
+              {labora.botActivity.phase !== "idle" ? (
+                <div testId="bot-activity" role="status" aria-label={avatarActivityLabels[labora.botActivity.phase]} style={{ paddingTop: 12, paddingBottom: 12 }}>
+                  <Label secondary style={{ color: labora.botActivity.phase === "failed" ? color.error : color.secondary }}>
+                    {avatarActivityLabels[labora.botActivity.phase]}
                   </Label>
                 </div>
               ) : null}

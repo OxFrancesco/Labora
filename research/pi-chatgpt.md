@@ -2,6 +2,8 @@
 
 Checked on 2026-10-02 against upstream source and official documentation. This is a feasibility review. No credentials were read, no model request was sent, and nothing was deployed.
 
+Later implementation evidence on the same date: the local Hydra bot completed fresh Labora ChatGPT authorization, streamed real responses, and selected Executor tools through codemode. Native cancellation and transcript restoration also passed. See [verification](../verification/README.md#hydra-chatgpt-and-activity-animations). These later checks establish local subscription use; model execution inside the deployed Cloudflare sandbox still needs verification. The sections below retain the original feasibility review and its source references.
+
 Pi 1.0 is a suitable starting point for a personal Cloudflare-hosted agent. Run the complete Pi process inside a Cloudflare Linux Sandbox, with Workers and Durable Objects managing requests and lifecycle. Pi also includes the new official Sign in with ChatGPT integration. The remaining proof is a real authenticated run with tools inside the deployed sandbox.
 
 ## Release and packages

@@ -336,6 +336,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
             );
           });
 
+          if (!approved) cancelledRunId = runId;
+
           return approved
             ? undefined
             : { block: true, reason: "The user did not approve this action.", terminate: true };
@@ -389,6 +391,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
   const bindSession = () => activeSession.subscribe((event) => {
     if (event.type === "message_start" && event.message.role === "assistant") {
+      if (runId) emit(EventPayload.cases.RunActivity.make({ runId, phase: "thinking" }));
       assistantId = `assistant-${event.message.timestamp}`;
       streamingAssistant = Message.make({
         id: assistantId,
@@ -398,7 +401,17 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       });
     }
 
+    if (event.type === "auto_retry_start" && runId)
+      emit(EventPayload.cases.RunActivity.make({
+        runId, phase: "retrying", message: `Retrying request (${event.attempt}/${event.maxAttempts})`,
+      }));
+
+    if (event.type === "message_update" && event.assistantMessageEvent.type === "thinking_start" && runId)
+      emit(EventPayload.cases.RunActivity.make({ runId, phase: "thinking" }));
+
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+      const offset = streamingAssistant?.text.length ?? 0;
+
       if (streamingAssistant)
         streamingAssistant = Message.make({
           ...streamingAssistant,
@@ -407,6 +420,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       emit(
         EventPayload.cases.TextDelta.make({
           messageId: assistantId,
+          offset,
           text: event.assistantMessageEvent.delta,
         }),
       );
@@ -639,46 +653,54 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     }
   };
 
+  const readMessages = (conversationId: string) => {
+    const history = conversationId === activeConversationId
+      ? activeSession.state.messages
+      : SessionManager.continueRecent(workspace, sessionDirectory(conversationId))
+          .buildSessionContext().messages;
+
+    const messages = history.flatMap((message) => {
+      if (message.role !== "user" && message.role !== "assistant") return [];
+
+      const text = Array.isArray(message.content)
+        ? message.content
+            .flatMap((part) => (part.type === "text" ? [part.text] : []))
+            .join("")
+        : message.content;
+
+      return [
+        Message.make({
+          id: `${message.role}-${message.timestamp}`,
+          role: message.role,
+          text,
+          createdAt: new Date(message.timestamp).toISOString(),
+        }),
+      ];
+    });
+
+    const partial = conversationId === activeConversationId ? streamingAssistant : undefined;
+
+    if (partial && !messages.some((message) => message.id === partial.id))
+      messages.push(partial);
+
+    return messages;
+  };
+
   const handle = Effect.fn("AgentWorker.handle")((request: ChildRequest) =>
     Effect.tryPromise({
       try: async () => {
+        // Keep the transcript and its IPC event cursor in the same synchronous turn.
+        if (ChildCommand.isAnyOf(["Messages"])(request.command)) {
+          const value = readMessages(request.command.conversationId ?? "direct");
+          output(ChildOutput.cases.Response.make({ id: request.id, value }));
+
+          return;
+        }
+
         const value = await ChildCommand.match<Promise<Schema.Schema.Type<typeof Schema.Json>>>(
           request.command,
           {
-            Messages: async (command) => {
-              const conversationId = command.conversationId ?? "direct";
-
-              const history = conversationId === activeConversationId
-                ? activeSession.state.messages
-                : SessionManager.continueRecent(workspace, sessionDirectory(conversationId))
-                    .buildSessionContext().messages;
-
-              const messages = history.flatMap((message) => {
-                if (message.role !== "user" && message.role !== "assistant") return [];
-
-                const text = Array.isArray(message.content)
-                  ? message.content
-                      .flatMap((part) => (part.type === "text" ? [part.text] : []))
-                      .join("")
-                  : message.content;
-
-                return [
-                  Message.make({
-                    id: `${message.role}-${message.timestamp}`,
-                    role: message.role,
-                    text,
-                    createdAt: new Date(message.timestamp).toISOString(),
-                  }),
-                ];
-              });
-
-              const partial = conversationId === activeConversationId ? streamingAssistant : undefined;
-
-              if (partial && !messages.some((message) => message.id === partial.id))
-                messages.push(partial);
-
-              return messages;
-            },
+            Messages: async (command) => readMessages(command.conversationId ?? "direct"),
             ForgetConversation: async (command) => {
               if (command.conversationId === "direct") throw new Error("The direct conversation cannot be deleted here.");
 

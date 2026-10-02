@@ -8,6 +8,7 @@ export interface DesktopDriverOptions {
   evidenceDirectory: string;
   source?: boolean;
   executable?: string;
+  foreground?: boolean;
 }
 
 export async function openDesktop(options: DesktopDriverOptions) {
@@ -31,7 +32,7 @@ export async function openDesktop(options: DesktopDriverOptions) {
     env: {
       ...process.env,
       LABORA_DESKTOP_DATA_DIR: options.profileDirectory,
-      GPUIX_BACKGROUND: "1",
+      GPUIX_BACKGROUND: options.foreground ? "0" : "1",
       PATH: options.source ? process.env.PATH : "/usr/bin:/bin:/usr/sbin:/sbin",
     },
   });

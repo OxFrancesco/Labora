@@ -94,7 +94,11 @@ export interface AuthStatus extends Schema.Schema.Type<typeof AuthStatus> {}
 export const EventPayload = Schema.TaggedUnion({
   Ready: { pid: Schema.Number },
   Message: { message: Message },
-  TextDelta: { messageId: Schema.String, text: Schema.String },
+  TextDelta: {
+    messageId: Schema.String,
+    text: Schema.String,
+    offset: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
+  },
   ToolStart: { toolCallId: Schema.String, name: Schema.String, input: Schema.Json },
   ToolEnd: {
     toolCallId: Schema.String,
@@ -103,6 +107,11 @@ export const EventPayload = Schema.TaggedUnion({
     output: Schema.Json,
   },
   RunStarted: { runId: Schema.String },
+  RunActivity: {
+    runId: Schema.String,
+    phase: Schema.Literals(["thinking", "retrying"]),
+    message: Schema.optionalKey(Schema.String),
+  },
   RunCompleted: { runId: Schema.String },
   RunCancelled: { runId: Schema.String },
   RunFailed: { runId: Schema.String, message: Schema.String },
@@ -128,6 +137,7 @@ export const isConversationEvent = EventPayload.isAnyOf([
   "ToolStart",
   "ToolEnd",
   "RunStarted",
+  "RunActivity",
   "RunCompleted",
   "RunCancelled",
   "RunFailed",
@@ -135,11 +145,26 @@ export const isConversationEvent = EventPayload.isAnyOf([
   "ApprovalResolved",
 ]);
 
+export const BotActivity = Schema.Struct({
+  phase: Schema.Literals([
+    "idle", "thinking", "streaming", "working", "waiting", "retrying",
+    "complete", "failed", "cancelled", "reconnecting",
+  ]),
+  runId: Schema.optionalKey(Schema.String),
+  tools: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })),
+  approvalIds: Schema.Array(Schema.String),
+  message: Schema.optionalKey(Schema.String),
+});
+
+export interface BotActivity extends Schema.Schema.Type<typeof BotActivity> {}
+
 export const MessageSnapshot = Schema.Struct({
   messages: Schema.Array(Message),
   cursor: Schema.Number,
   busy: Schema.Boolean,
   pending: Schema.Array(EventPayload),
+  activity: Schema.optionalKey(BotActivity),
+  botActivity: Schema.optionalKey(BotActivity),
 });
 
 export interface MessageSnapshot extends Schema.Schema.Type<typeof MessageSnapshot> {}

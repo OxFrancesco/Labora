@@ -24,7 +24,7 @@ The scope is four runtime components: the GPUix client, authenticated computer c
 - [x] Build the Cloudflare desktop image and validate deployment configuration.
 - [x] Verify the installed app and deployed desktop.
 - [x] Verify real Blender assets in the packaged native renderer and character picker.
-- [ ] Verify a model response and model-selected tool turn when ChatGPT eligibility allows.
+- [x] Verify a local model response and model-selected Executor tool turn with the Hydra ChatGPT account.
 - [x] Review the evidence and publish the private report.
 - [x] Send the final recordings to Telegram.
 
@@ -40,4 +40,6 @@ The packaged macOS app passed 19 recorded checks, including eyes-only Blender ch
 
 The next source and packaged builds passed 24 recorded native checks, adding settings persistence and real paused/enabled/blocked routine behavior. All 256 installed files match that bundle. CUA verified the installed browser connection choices. Browser enrollment passed discovery, consent, private persistence and acknowledgement with the production UI and a real isolated companion. Its Tailscale discovery and HTTPS transport were injected test fixtures; this does not establish a live personal-tailnet enrollment. Target setup passed eight browser checks plus isolated source and packaged startup checks. Backend verification covers routine cancellation, transcript deletion, inactive enrollment leases, owner/CSRF checks, revocation and concurrent runtime initialization.
 
-ChatGPT was previously rejected for the account's workspace and plan. A new headless Labora sign-in is waiting for browser authorization. No successful model turn or model-selected Executor action has been verified. On-device voice is implemented and packaged, but a real microphone transcript remains unverified. Group chats and complete Grok Bot settings parity remain open.
+The earlier ChatGPT account was rejected for its workspace and plan. Reusing that registration with Hydra also produced a workspace restriction. A fresh Hydra bot registration succeeded through Helium, followed by real GPT-5.5 inference and three model-selected Executor execute calls through Pi code mode. Native source verification passed real incremental replies, exact final-text reconstruction, Stop, and restart persistence. Characters now reflect actual per-bot activity and respect native reduced motion. The Cloudflare bot's ChatGPT connection remains separate and unverified.
+
+On-device voice is implemented and packaged, but a real microphone transcript remains unverified. Group chats and complete Grok Bot settings parity remain open.
