@@ -71,4 +71,8 @@ A fresh bot-specific Labora registration completed ChatGPT headless authorizatio
 
 `artifacts/streaming-e2e/result.json` records nine production HTTP/Pi checks for replay, offsets, reconnect, independent tools, approvals, and terminal states. Direct process checks prove polling dormant bots does not start Pi workers. `artifacts/avatar-motion/result.json` covers all ten native poses and blinking on all six real USDZ models.
 
+The final standalone build passed the same seven real ChatGPT checks with its packaged native app, companion, and Pi worker. `evidence/live-chatgpt-packaged-2026-10-02T16-32-01-763Z/result.json` records 545 incremental updates across the completed and cancelled requests. `evidence/activity-packaged-2026-10-02T16-33-07-376Z/result.json` records all 17 activity checks against the packaged native UI and an isolated source companion/provider fixture. Its pixel comparisons confirm idle, thinking, writing, and tool animations. The build passed full type checking, anti-slop lint, and native runtime preflight; the committed diff passed Gitleaks.
+
+`evidence/installed-hydra-motion-20261002/result.json` confirms all 256 entries of the installed `~/Applications/Labora.app` match the tested bundle, with deep strict signature and runtime checks. The previous installed app is retained as a hidden backup. This file comparison establishes installed artifact identity; the visible UI tests ran the packaged build in an isolated profile, and the default profile remains separate.
+
 Reduce Motion and inactive-app handling are implemented but were not verified by changing global system preferences. ChatGPT authorization and model use in the Cloudflare bot remain separate and unverified; the successful Hydra runs are local.
