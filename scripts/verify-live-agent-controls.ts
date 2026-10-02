@@ -71,9 +71,12 @@ try {
   await app.getByTestId("avatar3d-ready-pebble-26").waitFor({ timeoutMs: 30_000 });
 
   for (const name of ["spark", "cube", "pyramid", "star", "hexagon", "pebble"])
-    for (const size of [26, 42, 80])
-      if (await app.getByTestId(`avatar3d-view-${name}-${size}`).count())
-        await app.getByTestId(`avatar3d-ready-${name}-${size}`).waitFor({ timeoutMs: 30_000 });
+    for (const size of [26, 42, 80]) {
+      const expected = await app.getByTestId(`avatar3d-view-${name}-${size}`).count();
+
+      if (expected) await waitUntil("all visible avatars to load", async () => await app.getByTestId(`avatar3d-ready-${name}-${size}`).count() === expected);
+    }
+
   await driver.screenshot("01-ready");
   await app.getByTestId("composer").fill("This is a harmless native interaction test about an imaginary desk plant. First use update_plan to record two steps: ask for a color, then acknowledge the answer. Then call ask_user with exactly one question: id color, question Which color should the imaginary plant pot use?, options Blue and Green. Wait for my answer. After receiving it, mark the plan complete and reply exactly LABORA_QUESTION_DONE followed by the chosen color. Use only update_plan and ask_user, either directly or through codemode; do not access files, computers, integrations, or the web.");
   await app.getByTestId("send").click();

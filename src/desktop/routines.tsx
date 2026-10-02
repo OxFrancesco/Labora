@@ -83,8 +83,8 @@ function RoutineResults({ selected, routine, close }: { selected: LinkedBot; rou
     {error ? <Label size={12} style={{ color: color.error }}>{error}</Label> : null}
     <div style={{ display: "flex", flexDirection: "column", overflowY: "scroll", minHeight: 0, flexGrow: 1, gap: 14 }}>
       {snapshot && !snapshot.messages.length ? <Label secondary size={13}>No results yet</Label> : null}
-      {snapshot?.messages.map((message) => <div key={message.id} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 10, borderRadius: 10, backgroundColor: message.role === "user" ? color.surface : "transparent" }}>
-        <Label secondary size={11}>{message.role === "user" ? "Instruction" : selected.bot.name} · {new Date(message.createdAt).toLocaleTimeString()}</Label>
+      {snapshot?.messages.map((message) => message.role === "assistant" && !message.text.trim() ? null : <div key={message.id} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 10, borderRadius: 10, backgroundColor: message.role === "user" ? color.surface : "transparent" }}>
+        <Label secondary size={11}>{`${message.role === "user" ? "Instruction" : selected.bot.name} · ${new Date(message.createdAt).toLocaleTimeString()}`}</Label>
         <markdown source={message.text} style={{ color: color.text, fontFamily: font, fontSize: 13, lineHeight: 20 }} />
       </div>)}
       {snapshot?.plan ? <AgentPlan plan={snapshot.plan} /> : null}
