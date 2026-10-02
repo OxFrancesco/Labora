@@ -1,0 +1,19 @@
+
+# codeview reference codebases
+resources/
+node_modules/
+.labora/
+dist/
+evidence/
+artifacts/
+report/
+.wrangler/
+verification/reference/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.blend1
+cloud/wrangler.local.jsonc
+**/.dev.vars
+**/.dev.vars.*

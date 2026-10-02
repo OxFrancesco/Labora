@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "labora-desktops",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": [
+    "enable_request_signal"
+  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "secrets": {
+    "required": [
+      "LABORA_ADMIN_TOKEN"
+    ]
+  },
+  "containers": [
+    {
+      "class_name": "LaboraDesktop",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "desktop": {
+          "dockerfile": "../Dockerfile"
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DESKTOPS",
+        "class_name": "LaboraDesktop"
+      }
+    ]
+  },
+  "exports": {
+    "LaboraDesktop": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}

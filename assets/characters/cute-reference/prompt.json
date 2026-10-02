@@ -1,0 +1,8 @@
+{
+  "generatedAt": "2026-10-02",
+  "tool": "image_gen.imagegen",
+  "usage": "Visual inspiration only; final app assets are Blender geometry",
+  "reference": "before.png",
+  "output": "concept.png",
+  "prompt": "Use case: stylized-concept. This is a DESIGN REFERENCE BOARD for real Blender assets we are revising, not the final app artwork. Reimagine the six referenced shapes as irresistibly cute tiny collectible desk toys. Current eyes look uncanny: replace enormous protruding glossy eyeballs with two SMALL simple near-flat dark oval inlays, much closer together, tiny single highlight, no iris/sclera or realistic eye gloss. ONLY eyes as facial features: absolutely no mouth, brows, cheeks, nose. Bodies soft and plump with generous friendly corner radii. Shorter rounded star points, cuddly cube, soft hexagon, pudgy four-point spark, rounded triangular pyramid, plush pebble. Preserve distinct materials and colors: warm yellow clay star, powder-blue frosted glass cube, sage green satin metal hexagon, lilac silicone spark, peach glazed ceramic pyramid, cream tidy felt pebble. Fine subtle material detail, no dirty/skinlike rough grain, no sharp chrome frames, no spiky felt. Gentle studio lighting on warm pale neutral ground. Clean six-object composition, no labels, no text. Make the personality come from warm proportions and slight jaunty body tilts, never human realism."
+}

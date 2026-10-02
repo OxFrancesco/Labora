@@ -1,0 +1,9 @@
+**
+!package.json
+!bun.lock
+!src
+!src/**
+!scripts
+!scripts/computer-serve.ts
+!cloud
+!cloud/container-entrypoint.sh

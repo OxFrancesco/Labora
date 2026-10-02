@@ -1,0 +1,44 @@
+{
+  "meshObjects": 5,
+  "vertices": 3460,
+  "triangles": 6900,
+  "nonManifoldEdges": 0,
+  "bounds": {
+    "min": [
+      -0.8695791959762573,
+      -0.490999311208725,
+      -0.8497451543807983
+    ],
+    "max": [
+      0.8699206709861755,
+      0.7578896284103394,
+      0.8011027574539185
+    ]
+  },
+  "face": {
+    "style": "Small shallow matte cartoon eyes",
+    "eyes": 2,
+    "catchlights": 2,
+    "mouth": false,
+    "eyebrow": false,
+    "eyeWidthRadius": 0.09,
+    "eyeHeightRadius": 0.137,
+    "eyeCenterSpacing": 0.35,
+    "maximumEyeProtrusion": 0.016
+  },
+  "name": "pyramid",
+  "material": "Coral glazed ceramic",
+  "files": {
+    "blend": "pyramid.blend",
+    "glb": "pyramid.glb",
+    "usdz": "pyramid.usdz"
+  },
+  "preview": "pyramid/preview.png",
+  "normalTexture": "pyramid/surface-normal.png",
+  "blenderVersion": "5.2.0 LTS",
+  "sourceFront": "-Y",
+  "sourceUp": "+Z",
+  "exportUp": "+Y",
+  "gltfFront": "+Z",
+  "initialCameraOrbit": "15deg 78deg 105%"
+}

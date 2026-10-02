@@ -1,0 +1,44 @@
+{
+  "meshObjects": 5,
+  "vertices": 4304,
+  "triangles": 8588,
+  "nonManifoldEdges": 0,
+  "bounds": {
+    "min": [
+      -0.8999999761581421,
+      -0.9210005402565002,
+      -0.8999999761581421
+    ],
+    "max": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421
+    ]
+  },
+  "face": {
+    "style": "Small shallow matte cartoon eyes",
+    "eyes": 2,
+    "catchlights": 2,
+    "mouth": false,
+    "eyebrow": false,
+    "eyeWidthRadius": 0.09,
+    "eyeHeightRadius": 0.137,
+    "eyeCenterSpacing": 0.35,
+    "maximumEyeProtrusion": 0.016
+  },
+  "name": "cube",
+  "material": "Blue frosted glass",
+  "files": {
+    "blend": "cube.blend",
+    "glb": "cube.glb",
+    "usdz": "cube.usdz"
+  },
+  "preview": "cube/preview.png",
+  "normalTexture": "cube/surface-normal.png",
+  "blenderVersion": "5.2.0 LTS",
+  "sourceFront": "-Y",
+  "sourceUp": "+Z",
+  "exportUp": "+Y",
+  "gltfFront": "+Z",
+  "initialCameraOrbit": "15deg 78deg 105%"
+}

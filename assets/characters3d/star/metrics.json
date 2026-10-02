@@ -1,0 +1,44 @@
+{
+  "meshObjects": 5,
+  "vertices": 6394,
+  "triangles": 12768,
+  "nonManifoldEdges": 0,
+  "bounds": {
+    "min": [
+      -1.0838863849639893,
+      -0.5326446890830994,
+      -0.9424408674240112
+    ],
+    "max": [
+      1.0838863849639893,
+      0.5199999809265137,
+      1.1293525695800781
+    ]
+  },
+  "face": {
+    "style": "Small shallow matte cartoon eyes",
+    "eyes": 2,
+    "catchlights": 2,
+    "mouth": false,
+    "eyebrow": false,
+    "eyeWidthRadius": 0.09,
+    "eyeHeightRadius": 0.137,
+    "eyeCenterSpacing": 0.35,
+    "maximumEyeProtrusion": 0.016
+  },
+  "name": "star",
+  "material": "Hand-worked yellow clay",
+  "files": {
+    "blend": "star.blend",
+    "glb": "star.glb",
+    "usdz": "star.usdz"
+  },
+  "preview": "star/preview.png",
+  "normalTexture": "star/surface-normal.png",
+  "blenderVersion": "5.2.0 LTS",
+  "sourceFront": "-Y",
+  "sourceUp": "+Z",
+  "exportUp": "+Y",
+  "gltfFront": "+Z",
+  "initialCameraOrbit": "15deg 78deg 105%"
+}

@@ -1,0 +1,44 @@
+{
+  "meshObjects": 5,
+  "vertices": 4476,
+  "triangles": 8932,
+  "nonManifoldEdges": 0,
+  "bounds": {
+    "min": [
+      -0.9700779914855957,
+      -0.4109998643398285,
+      -1.0756548643112183
+    ],
+    "max": [
+      0.9700779914855957,
+      0.39000004529953003,
+      1.0756548643112183
+    ]
+  },
+  "face": {
+    "style": "Small shallow matte cartoon eyes",
+    "eyes": 2,
+    "catchlights": 2,
+    "mouth": false,
+    "eyebrow": false,
+    "eyeWidthRadius": 0.09,
+    "eyeHeightRadius": 0.137,
+    "eyeCenterSpacing": 0.35,
+    "maximumEyeProtrusion": 0.016
+  },
+  "name": "hexagon",
+  "material": "Green brushed metal",
+  "files": {
+    "blend": "hexagon.blend",
+    "glb": "hexagon.glb",
+    "usdz": "hexagon.usdz"
+  },
+  "preview": "hexagon/preview.png",
+  "normalTexture": "hexagon/surface-normal.png",
+  "blenderVersion": "5.2.0 LTS",
+  "sourceFront": "-Y",
+  "sourceUp": "+Z",
+  "exportUp": "+Y",
+  "gltfFront": "+Z",
+  "initialCameraOrbit": "15deg 78deg 105%"
+}

@@ -1,0 +1,227 @@
+{
+  "blenderVersion": "5.2.0 LTS",
+  "checks": [
+    {
+      "character": "star",
+      "face": {
+        "style": "Small shallow matte cartoon eyes",
+        "eyes": 2,
+        "catchlights": 2,
+        "mouth": false,
+        "eyebrow": false,
+        "eyeWidthRadius": 0.09,
+        "eyeHeightRadius": 0.137,
+        "eyeCenterSpacing": 0.35,
+        "maximumEyeProtrusion": 0.016
+      },
+      "sourceManifold": true,
+      "allComponentsHaveVolume": true,
+      "sourceTexturesPacked": true,
+      "glbReimportedMeshes": 5,
+      "usdzMeshCount": 5,
+      "triangles": 12768,
+      "exportUp": "+Y",
+      "exportFront": "+Z",
+      "noBillboardsOrBaseColorImages": true,
+      "files": {
+        "blend": {
+          "bytes": 398343,
+          "sha256": "b416e21bab70e9dfad2ecc86a90f623791dde33dd7bc2bd11e4f9e3b194521c9"
+        },
+        "glb": {
+          "bytes": 415792,
+          "sha256": "faad63eac2381923e47e62921eafd3ee634b850be3442416dcf15496b156da48"
+        },
+        "usdz": {
+          "bytes": 563435,
+          "sha256": "fefbdfb60bf406952be0d90fdd092fe3b4523e619d2d16f85018efac5f1b1aa8"
+        }
+      }
+    },
+    {
+      "character": "cube",
+      "face": {
+        "style": "Small shallow matte cartoon eyes",
+        "eyes": 2,
+        "catchlights": 2,
+        "mouth": false,
+        "eyebrow": false,
+        "eyeWidthRadius": 0.09,
+        "eyeHeightRadius": 0.137,
+        "eyeCenterSpacing": 0.35,
+        "maximumEyeProtrusion": 0.016
+      },
+      "sourceManifold": true,
+      "allComponentsHaveVolume": true,
+      "sourceTexturesPacked": true,
+      "glbReimportedMeshes": 5,
+      "usdzMeshCount": 5,
+      "triangles": 8588,
+      "exportUp": "+Y",
+      "exportFront": "+Z",
+      "noBillboardsOrBaseColorImages": true,
+      "files": {
+        "blend": {
+          "bytes": 316370,
+          "sha256": "90549f76134c705dc97f97248cea0f3d5a09f98487e70c20016cc0e00c8be144"
+        },
+        "glb": {
+          "bytes": 328028,
+          "sha256": "246c9e3f091498cc80d4a73999d75dde74a3b7a3830de08bf3ef4d623340493b"
+        },
+        "usdz": {
+          "bytes": 426213,
+          "sha256": "5ba6d7352eb3b40ca3381fdda0fe66a1e8a2680faf951117128b96c97b23b450"
+        }
+      }
+    },
+    {
+      "character": "hexagon",
+      "face": {
+        "style": "Small shallow matte cartoon eyes",
+        "eyes": 2,
+        "catchlights": 2,
+        "mouth": false,
+        "eyebrow": false,
+        "eyeWidthRadius": 0.09,
+        "eyeHeightRadius": 0.137,
+        "eyeCenterSpacing": 0.35,
+        "maximumEyeProtrusion": 0.016
+      },
+      "sourceManifold": true,
+      "allComponentsHaveVolume": true,
+      "sourceTexturesPacked": true,
+      "glbReimportedMeshes": 5,
+      "usdzMeshCount": 5,
+      "triangles": 8932,
+      "exportUp": "+Y",
+      "exportFront": "+Z",
+      "noBillboardsOrBaseColorImages": true,
+      "files": {
+        "blend": {
+          "bytes": 198535,
+          "sha256": "002d0f503b3842ef5c3701cac2e201d75bbf8d291dd3aa73c0285ce425af2eb8"
+        },
+        "glb": {
+          "bytes": 208328,
+          "sha256": "2384978bc0fc664f99212c1677e6759ab7ff2cf4519593d804f4c9e31d281253"
+        },
+        "usdz": {
+          "bytes": 310351,
+          "sha256": "5bb6d08b04092e870d2bac219d2e996b5816ec6c9e1e332c100b24db9e1da824"
+        }
+      }
+    },
+    {
+      "character": "spark",
+      "face": {
+        "style": "Small shallow matte cartoon eyes",
+        "eyes": 2,
+        "catchlights": 2,
+        "mouth": false,
+        "eyebrow": false,
+        "eyeWidthRadius": 0.085,
+        "eyeHeightRadius": 0.132,
+        "eyeCenterSpacing": 0.33,
+        "maximumEyeProtrusion": 0.016
+      },
+      "sourceManifold": true,
+      "allComponentsHaveVolume": true,
+      "sourceTexturesPacked": true,
+      "glbReimportedMeshes": 5,
+      "usdzMeshCount": 5,
+      "triangles": 11392,
+      "exportUp": "+Y",
+      "exportFront": "+Z",
+      "noBillboardsOrBaseColorImages": true,
+      "files": {
+        "blend": {
+          "bytes": 400273,
+          "sha256": "862af582f6b78ac00edd556c2fd6a1bebfb9622438e6ac4c49c58fac4bd629f2"
+        },
+        "glb": {
+          "bytes": 416348,
+          "sha256": "8865198bb373f79fb5d87ee7a0e37db0bf8bd0c7e4ac5e9d807ef26f503fa7d2"
+        },
+        "usdz": {
+          "bytes": 542335,
+          "sha256": "e7d44994df24a23cc9562d38e7346a6152477bd4ee8eaa188c90ee04918c0b47"
+        }
+      }
+    },
+    {
+      "character": "pyramid",
+      "face": {
+        "style": "Small shallow matte cartoon eyes",
+        "eyes": 2,
+        "catchlights": 2,
+        "mouth": false,
+        "eyebrow": false,
+        "eyeWidthRadius": 0.09,
+        "eyeHeightRadius": 0.137,
+        "eyeCenterSpacing": 0.35,
+        "maximumEyeProtrusion": 0.016
+      },
+      "sourceManifold": true,
+      "allComponentsHaveVolume": true,
+      "sourceTexturesPacked": true,
+      "glbReimportedMeshes": 5,
+      "usdzMeshCount": 5,
+      "triangles": 6900,
+      "exportUp": "+Y",
+      "exportFront": "+Z",
+      "noBillboardsOrBaseColorImages": true,
+      "files": {
+        "blend": {
+          "bytes": 190874,
+          "sha256": "bdcbf8c413a89669324bc42af1da327813402adce8c0282944b801d226c677f4"
+        },
+        "glb": {
+          "bytes": 184724,
+          "sha256": "f19acd677c4edac9853bf8825f16eeadb5ef5d18b8bd8fa258e9b974a4fdaae6"
+        },
+        "usdz": {
+          "bytes": 256942,
+          "sha256": "ae890739710d06bc040dcf1c75a96b9095777a331810ec8cc6b2f86b7c49ca31"
+        }
+      }
+    },
+    {
+      "character": "pebble",
+      "face": {
+        "style": "Small shallow matte cartoon eyes",
+        "eyes": 2,
+        "catchlights": 2,
+        "mouth": false,
+        "eyebrow": false,
+        "eyeWidthRadius": 0.09,
+        "eyeHeightRadius": 0.137,
+        "eyeCenterSpacing": 0.35,
+        "maximumEyeProtrusion": 0.016
+      },
+      "sourceManifold": true,
+      "allComponentsHaveVolume": true,
+      "sourceTexturesPacked": true,
+      "glbReimportedMeshes": 6,
+      "usdzMeshCount": 6,
+      "triangles": 49408,
+      "exportUp": "+Y",
+      "exportFront": "+Z",
+      "noBillboardsOrBaseColorImages": true,
+      "files": {
+        "blend": {
+          "bytes": 1179013,
+          "sha256": "e02cedb49d43cd29419425f7fa327c55ff9c43f86723980f874014cc59d52363"
+        },
+        "glb": {
+          "bytes": 1282576,
+          "sha256": "b51d31ab6065d931c6475e5c71d1e4f355478948e48ea11cf024e264258f6df9"
+        },
+        "usdz": {
+          "bytes": 1839678,
+          "sha256": "e56d43ce285fe78fc9dde1b126975a58bedb1399f832b2cb6bb181da43b1416a"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "meshObjects": 6,
+  "vertices": 28314,
+  "triangles": 49408,
+  "nonManifoldEdges": 0,
+  "bounds": {
+    "min": [
+      -1.091698408126831,
+      -0.7465918660163879,
+      -0.9811995029449463
+    ],
+    "max": [
+      1.0925010442733765,
+      0.7425938844680786,
+      0.9766072034835815
+    ]
+  },
+  "face": {
+    "style": "Small shallow matte cartoon eyes",
+    "eyes": 2,
+    "catchlights": 2,
+    "mouth": false,
+    "eyebrow": false,
+    "eyeWidthRadius": 0.09,
+    "eyeHeightRadius": 0.137,
+    "eyeCenterSpacing": 0.35,
+    "maximumEyeProtrusion": 0.016
+  },
+  "name": "pebble",
+  "material": "Ivory felt",
+  "files": {
+    "blend": "pebble.blend",
+    "glb": "pebble.glb",
+    "usdz": "pebble.usdz"
+  },
+  "preview": "pebble/preview.png",
+  "normalTexture": "pebble/surface-normal.png",
+  "blenderVersion": "5.2.0 LTS",
+  "sourceFront": "-Y",
+  "sourceUp": "+Z",
+  "exportUp": "+Y",
+  "gltfFront": "+Z",
+  "initialCameraOrbit": "15deg 78deg 105%"
+}

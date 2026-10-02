@@ -1,0 +1,18 @@
+{
+  "path": "cloudflare_docs.user.publicDocs.search_cloudflare_documentation",
+  "resultCount": 5,
+  "results": [
+    {
+      "title": "Pi",
+      "url": "https://developers.cloudflare.com/sandbox/coding-agents/pi/"
+    },
+    {
+      "title": "Build A Coding Agent Runner",
+      "url": "https://developers.cloudflare.com/sandbox/get-started/build-a-coding-agent-runner/"
+    },
+    {
+      "title": "Coding Agents",
+      "url": "https://developers.cloudflare.com/sandbox/coding-agents/"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "meshObjects": 5,
+  "vertices": 5706,
+  "triangles": 11392,
+  "nonManifoldEdges": 0,
+  "bounds": {
+    "min": [
+      -0.9959999918937683,
+      -0.5158155560493469,
+      -1.1059999465942383
+    ],
+    "max": [
+      0.9959999918937683,
+      0.5,
+      1.121999979019165
+    ]
+  },
+  "face": {
+    "style": "Small shallow matte cartoon eyes",
+    "eyes": 2,
+    "catchlights": 2,
+    "mouth": false,
+    "eyebrow": false,
+    "eyeWidthRadius": 0.085,
+    "eyeHeightRadius": 0.132,
+    "eyeCenterSpacing": 0.33,
+    "maximumEyeProtrusion": 0.016
+  },
+  "name": "spark",
+  "material": "Lavender matte silicone",
+  "files": {
+    "blend": "spark.blend",
+    "glb": "spark.glb",
+    "usdz": "spark.usdz"
+  },
+  "preview": "spark/preview.png",
+  "normalTexture": "spark/surface-normal.png",
+  "blenderVersion": "5.2.0 LTS",
+  "sourceFront": "-Y",
+  "sourceUp": "+Z",
+  "exportUp": "+Y",
+  "gltfFront": "+Z",
+  "initialCameraOrbit": "15deg 78deg 105%"
+}
