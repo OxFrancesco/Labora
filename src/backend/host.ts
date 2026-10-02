@@ -28,6 +28,7 @@ import {
   EventPayload,
   isConversationEvent,
   MessageSnapshot,
+  WorkerMessages,
   UpdateBot,
   WorkspaceFile,
 } from "./contracts";
@@ -228,11 +229,11 @@ export const layer = (options: HostOptions) =>
               }
 
               if (EventPayload.isAnyOf(["ProcessExited"])(payload)) {
-                if (["thinking", "streaming", "working", "waiting", "retrying"].includes(worker.botActivity.phase))
+                if (["thinking", "streaming", "working", "waiting", "asking", "retrying", "compacting"].includes(worker.botActivity.phase))
                   worker.botActivity = reduceActivity(worker.botActivity, payload);
 
                 for (const [key, activity] of worker.conversationActivities)
-                  if (["thinking", "streaming", "working", "waiting", "retrying"].includes(activity.phase))
+                  if (["thinking", "streaming", "working", "waiting", "asking", "retrying", "compacting"].includes(activity.phase))
                     worker.conversationActivities.set(key, reduceActivity(activity, payload));
               }
 
@@ -365,6 +366,21 @@ export const layer = (options: HostOptions) =>
 
               if (EventPayload.isAnyOf(["ApprovalResolved"])(payload))
                 worker.interactive.delete(payload.requestId);
+
+              if (EventPayload.isAnyOf(["QuestionRequested"])(payload)) {
+                worker.activity.add(`question:${payload.requestId}`);
+                worker.interactive.set(payload.requestId, { payload, conversationId: event.conversationId ?? "direct" });
+              }
+
+              if (EventPayload.isAnyOf(["QuestionResolved"])(payload)) {
+                worker.activity.delete(`question:${payload.requestId}`);
+                worker.interactive.delete(payload.requestId);
+              }
+
+              if (EventPayload.isAnyOf(["InputQueueChanged"])(payload)) {
+                if (payload.items.length) worker.interactive.set("input-queue", { payload, conversationId: event.conversationId ?? "direct" });
+                else worker.interactive.delete("input-queue");
+              }
 
               if (EventPayload.isAnyOf(["AuthLink"])(payload))
                 worker.interactive.set("auth-link", { payload, conversationId: "direct" });
@@ -511,12 +527,12 @@ export const layer = (options: HostOptions) =>
         }
 
         for (const [key, activity] of conversationActivities)
-          if (["thinking", "streaming", "working", "waiting", "retrying"].includes(activity.phase))
+          if (["thinking", "streaming", "working", "waiting", "asking", "retrying", "compacting"].includes(activity.phase))
             conversationActivities.set(key, reduceActivity(activity, EventPayload.cases.ProcessExited.make({
               message: "The agent restarted before this run finished.",
             })));
 
-        if (["thinking", "streaming", "working", "waiting", "retrying"].includes(botActivity.phase))
+        if (["thinking", "streaming", "working", "waiting", "asking", "retrying", "compacting"].includes(botActivity.phase))
           botActivity = reduceActivity(botActivity, EventPayload.cases.ProcessExited.make({
             message: "The agent restarted before this run finished.",
           }));
@@ -651,6 +667,17 @@ export const layer = (options: HostOptions) =>
         command: ChildCommand,
         observedWorker?: Worker,
       ) {
+        if (ChildCommand.isAnyOf(["QueueInput", "QuestionResponse"])(command) ||
+          (ChildCommand.isAnyOf(["Cancel"])(command) && command.runId)) {
+          const active = workers.get(id);
+
+          if (!active || active.exited || !active.activeRunId || active.activeRunId !== command.runId ||
+            active.activeConversationId !== (command.conversationId ?? "direct"))
+            return yield* Effect.fail(new BackendError({
+              code: "stale_run", message: "This run is no longer accepting input. Reload the conversation and try again.", status: 409,
+            }));
+        }
+
         const worker = observedWorker ?? (yield* ensureWorker(id));
 
         if (worker.exited)
@@ -684,7 +711,7 @@ export const layer = (options: HostOptions) =>
             code: "conversation_busy", message: "The active run belongs to another conversation.", status: 409,
           }));
 
-        const outgoing = ChildCommand.isAnyOf(["Cancel"])(command) && worker.activeRunId
+        const outgoing = ChildCommand.isAnyOf(["Cancel"])(command) && !command.runId && worker.activeRunId
           ? ChildCommand.cases.Cancel.make({ ...command, runId: worker.activeRunId })
           : command;
 
@@ -743,9 +770,11 @@ export const layer = (options: HostOptions) =>
         conversationId = "direct",
       ) {
         const reply = yield* requestReply(id, ChildCommand.cases.Messages.make({ conversationId }));
+        const bundle = yield* Schema.decodeUnknownEffect(WorkerMessages)(reply.value).pipe(Effect.mapError(() => schemaError("Invalid worker messages")));
 
         return yield* Schema.decodeUnknownEffect(MessageSnapshot)({
-          messages: reply.value,
+          messages: bundle.messages,
+          plan: bundle.plan,
           cursor: reply.cursor,
           busy: reply.busy,
           pending: reply.interactive,

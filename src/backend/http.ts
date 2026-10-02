@@ -14,6 +14,8 @@ import {
   CreateBot,
   SendMessage,
   UpdateBot,
+  QuestionResponse,
+  QueueInput,
 } from "./contracts";
 
 export type AgentHttpOptions = AgentHost.HostOptions;
@@ -169,7 +171,7 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
 
     if (route === "activity" && request.method === "GET") return response(yield* host.activity(id));
 
-    if (route === "messages" || route === "events" || route === "cancel") {
+    if (route === "messages" || route === "events" || route === "cancel" || route === "questions" || route === "inputs") {
       const routines = yield* Routines.Service;
       yield* routines.conversation(id, conversationId);
     }
@@ -201,8 +203,28 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
       );
     }
 
-    if (route === "cancel" && request.method === "POST")
-      return response(yield* host.request(id, ChildCommand.cases.Cancel.make({ conversationId })));
+    if (route === "cancel" && request.method === "POST") {
+      const runId = url.searchParams.get("runId");
+
+      if (runId !== null && (!runId || runId.length > 128)) return yield* Effect.fail(invalid());
+      let command = ChildCommand.cases.Cancel.make({ conversationId });
+
+      if (runId) command = ChildCommand.cases.Cancel.make({ conversationId, runId });
+
+      return response(yield* host.request(id, command));
+    }
+
+    if (route === "questions" && segments[5] && request.method === "POST") {
+      const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(QuestionResponse))(yield* readBody(request)).pipe(Effect.mapError(invalid));
+
+      return response(yield* host.request(id, ChildCommand.cases.QuestionResponse.make({ ...input, requestId: segments[5], conversationId })));
+    }
+
+    if (route === "inputs" && request.method === "POST") {
+      const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(QueueInput))(yield* readBody(request)).pipe(Effect.mapError(invalid));
+
+      return response(yield* host.request(id, ChildCommand.cases.QueueInput.make({ ...input, conversationId })), 202);
+    }
 
     if (route === "auth" && request.method === "GET") {
       const status = yield* host.request(id, ChildCommand.cases.AuthStatus.make({}));

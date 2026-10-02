@@ -29,7 +29,7 @@ export function Avatar3D({ modelPath, name, size, interactive = false, activity 
   const pixels = Math.min(512, Math.max(64, Math.round(size * 2)));
 
   useEffect(() => {
-    const active = activity === "thinking" || activity === "streaming" || activity === "working" || activity === "waiting" || activity === "retrying";
+    const active = activity === "thinking" || activity === "compacting" || activity === "streaming" || activity === "working" || activity === "waiting" || activity === "asking" || activity === "retrying";
     const terminal = activity === "complete" || activity === "failed" || activity === "cancelled";
 
     if (active && (!observedRun.current || observedRun.current.key !== activityKey))
@@ -46,7 +46,8 @@ export function Avatar3D({ modelPath, name, size, interactive = false, activity 
       settled,
       pointer: () => interactive ? pointer.current : null,
       onFrame: (frame) => {
-        image.current?.setImagePixels(frame.width, frame.height, frame.pixels);
+        if (!image.current) return;
+        image.current.setImagePixels(frame.width, frame.height, frame.pixels);
 
         if (!displayed.current) {
           displayed.current = true;
@@ -100,7 +101,7 @@ export function Avatar3D({ modelPath, name, size, interactive = false, activity 
         alt={name}
         testId={`avatar3d-${ready ? "ready" : "loading"}-${name.split(",")[0]?.toLowerCase()}-${size}`}
         objectFit="contain"
-        style={{ width: size, height: size, pointerEvents: "none" }}
+        style={{ width: size, height: size, pointerEvents: "none", opacity: ready ? 1 : 0 }}
       />
     </div>
   );

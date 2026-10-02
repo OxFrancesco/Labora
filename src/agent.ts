@@ -12,7 +12,7 @@ import { createLaboraModelRuntime } from "./model-runtime";
 export async function createLaboraSession(paths: BotPaths, diagnostic = false) {
   const settingsManager = SettingsManager.create(paths.workspace, paths.agentDir);
   settingsManager.setCacheWarmingMode("off");
-  settingsManager.applyOverrides({ defaultTools: ["+codemode"] });
+  settingsManager.applyOverrides({ defaultTools: ["+codemode", "+grep", "+find", "+ls"] });
 
   const { modelRuntime } = await createLaboraModelRuntime(paths.agentDir);
 
@@ -89,6 +89,7 @@ export async function createLaboraSession(paths: BotPaths, diagnostic = false) {
   });
 
   await session.bindExtensions({});
+  session.setActiveToolsByName([...new Set([...session.getActiveToolNames(), "grep", "find", "ls", "codemode"])]);
 
   return session;
 }

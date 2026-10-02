@@ -1,5 +1,5 @@
 import { renameSync, rmSync, writeFileSync } from "node:fs";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Config, Effect, Schema } from "effect";
@@ -67,12 +67,16 @@ export async function createDesktopStore() {
     latest = value;
 
     const write = async () => {
+      if (latest === written) return;
+      const snapshot = latest;
       const temporary = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`;
 
       try {
-        await writeFile(temporary, JSON.stringify(value), { mode: 0o600, flag: "wx" });
-        await rename(temporary, path);
-        written = value;
+        await writeFile(temporary, JSON.stringify(snapshot), { mode: 0o600, flag: "wx" });
+
+        if (snapshot !== latest || snapshot === written) return;
+        renameSync(temporary, path);
+        written = snapshot;
       } finally {
         await rm(temporary, { force: true });
       }

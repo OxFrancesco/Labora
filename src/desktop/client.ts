@@ -1,10 +1,12 @@
 import { Effect, Result, Schema } from "effect";
-import { AgentEvent, AuthStatus, Bot, BotActivity, MessageSnapshot, WorkspaceFile } from "../backend/contracts";
+import { AgentEvent, AuthStatus, Bot, BotActivity, MessageSnapshot, QueuedInputResult, WorkspaceFile } from "../backend/contracts";
 import type {
   ApprovalResponse,
   AuthStart,
   CreateBot,
   SendMessage,
+  QuestionResponse,
+  QueueInput,
   UpdateBot,
 } from "../backend/contracts";
 import { Computer, PairResponse } from "../computer/contracts";
@@ -165,7 +167,21 @@ export function computerClient(connection: Connection) {
           })
         ).json(),
       ),
-    cancel: (id: string, conversationId?: string) => request(`/v1/bots/${id}/cancel${conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : ""}`, { method: "POST" }),
+    cancel: (id: string, conversationId = "direct", runId?: string) => {
+      const query = new URLSearchParams({ conversationId });
+
+      if (runId) query.set("runId", runId);
+
+      return request(`/v1/bots/${id}/cancel?${query}`, { method: "POST" });
+    },
+    answerQuestion: (id: string, requestId: string, answer: QuestionResponse, conversationId = "direct") =>
+      request(`/v1/bots/${id}/questions/${requestId}?conversationId=${encodeURIComponent(conversationId)}`, {
+        method: "POST", body: JSON.stringify(answer),
+      }),
+    queueInput: async (id: string, input: QueueInput, conversationId = "direct") =>
+      Schema.decodeUnknownSync(QueuedInputResult)(await (await request(`/v1/bots/${id}/inputs?conversationId=${encodeURIComponent(conversationId)}`, {
+        method: "POST", body: JSON.stringify(input),
+      })).json()),
     auth: async (id: string) =>
       Schema.decodeUnknownSync(AuthStatus)(await (await request(`/v1/bots/${id}/auth`)).json()),
     startAuth: (id: string, provider: AuthStart["provider"]) =>

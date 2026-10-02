@@ -15,6 +15,9 @@ Executor uses `agent/mcp-auth.json`, Pi 1.0's namespaced credential format, with
 | `PATCH /v1/bots/:id`                      | `{ bot }` from `UpdateBot`                    |
 | `GET /v1/bots/:id/messages`               | `MessageSnapshot`                             |
 | `POST /v1/bots/:id/messages`              | `{ runId }`, or an honest admission error     |
+| `GET /v1/bots/:id/activity`               | Activity without starting a dormant worker   |
+| `POST /v1/bots/:id/inputs`                | Run-scoped steering or queued follow-up      |
+| `POST /v1/bots/:id/questions/:requestId` | Answer or skip a pending model question      |
 | `POST /v1/bots/:id/cancel`                | Cancels current run or sign-in                |
 | `GET /v1/bots/:id/events?cursor=N`        | SSE; `Last-Event-ID` also accepted            |
 | `GET /v1/bots/:id/auth`                   | `AuthStatus`                                  |
@@ -32,4 +35,8 @@ The optional computer adapter is the only route to a computer. An absent adapter
 
 OpenAI sign-in uses Labora's provider override in `openai.ts` while retaining Pi's Responses inference implementation. The override preserves the issued client ID after an unsuccessful code exchange, uses Labora's name for initial registration, and validates ID-token signature, issuer, audience, expiry, and nonce before storing login credentials. This follows [OpenAI's registration and sign-in requirements](https://developers.openai.com/siwc/token-sharing-open-source/sign-in). An ID token is never included in an emitted authorization URL.
 
-Live verification on 2026-10-02 reached OpenAI's account authorization page. Reauthorization with the retained issued client was blocked there: “A required permission is unavailable. You can’t continue with this workspace and plan.” The pending flow was cancelled, its callback closed, and the host shut down. No ChatGPT credential or model response was obtained. Executor's existing Labora connection and the non-secret OpenAI registration/device identity were preserved; further ChatGPT attempts were stopped at the user's request.
+The earlier registration was rejected for its workspace and plan on 2026-10-02. A later, separate Hydra bot completed fresh Labora authorization and real subscription inference, including model-selected Executor reads. The packaged native client, companion, and Pi worker passed streaming, Stop, and transcript-restoration checks. See [verification evidence](../../verification/README.md). This local authorization does not authenticate a Cloudflare bot.
+
+Model questions use a separate `ask_user` tool and question-response channel. Pi extension `select`, `input`, and `confirm` dialogs use the same native bridge. Pending questions and input queues are replayed from snapshots; answers and queued messages must match the active run and conversation. Client IDs make repeated queue submissions idempotent. Stop clears queued messages so they cannot leak into a later task. Steering resolves a pending question as redirected without approving consequential tools.
+
+`update_plan` stores a validated, conversation-scoped checklist with atomic private writes. Plans restore independently of the event replay window. Bounded tool-progress events provide current output while automatic compaction and retries keep explicit activity states. Default read/search tools are enabled in both the companion worker and diagnostic CLI. The interactive question, queue, and plan UI belongs to the companion/native path.

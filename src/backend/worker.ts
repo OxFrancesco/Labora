@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import { Config, Effect, Schema, Stream } from "effect";
+import { Config, Effect, Result, Schema, Stream } from "effect";
 import { Type } from "typebox";
 import {
   createAgentSession,
@@ -10,6 +10,7 @@ import {
   DefaultResourceLoader,
   SessionManager,
   SettingsManager,
+  type AgentSession,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { registerBunOAuthFlows } from "@earendil-works/pi-ai/bun-oauth";
@@ -23,8 +24,11 @@ import {
   isConversationEvent,
   type Provider,
   type SendMessage,
+  UserQuestions,
 } from "./contracts";
 import { createExecutor } from "./executor";
+import { createAgentInteractions } from "./interaction";
+import { createPlanTool } from "./plan";
 import { createLaboraModelRuntime } from "../model-runtime";
 
 const json = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Json));
@@ -36,6 +40,8 @@ const CaptureResult = Schema.Struct({ frame: Frame, png: Schema.String });
 const CaptureInput = Schema.Struct({ displayId: Schema.String });
 
 const ActInput = Schema.Struct({ ...ActionsRequest.fields });
+
+const ProgressResult = Schema.Struct({ content: Schema.Array(Schema.Struct({ type: Schema.String, text: Schema.optionalKey(Schema.String) })) });
 
 interface PendingInput {
   readonly resolve: (value: string) => void;
@@ -87,6 +93,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   let runId: string | undefined;
   let cancelledRunId: string | undefined;
   let activeConversationId = "direct";
+  let activeSession: AgentSession;
 
   const emit = (payload: EventPayload, conversationId = activeConversationId) => {
     output(isConversationEvent(payload)
@@ -98,6 +105,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   let streamingAssistant: Message | undefined;
   const approvals = new Map<string, Approval>();
   const computerCalls = new Map<string, ComputerCall>();
+  const progressTimes = new Map<string, number>();
 
   const input = (provider: Provider, message: string, secret: boolean, signal: AbortSignal) =>
     new Promise<string>((resolve, reject) => {
@@ -185,6 +193,44 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       output(ChildOutput.cases.Computer.make({ id, operation, input: value }));
     });
 
+  const prepareMessage = async (message: SendMessage) => {
+    let text = message.text;
+    const images: { type: "image"; data: string; mimeType: string }[] = [];
+
+    for (const attachment of message.attachments ?? []) {
+      if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(attachment.mimeType))
+        images.push({ type: "image", data: attachment.data, mimeType: attachment.mimeType });
+      else {
+        const path = join(workspace, `${crypto.randomUUID()}-${attachment.name.replace(/[^a-zA-Z0-9_.-]/g, "_")}`);
+        await writeFile(path, Buffer.from(attachment.data, "base64"), { mode: 0o600 });
+        text += `\nAttached file: ${path}`;
+      }
+    }
+
+    return { text, images };
+  };
+
+  const interactions = createAgentInteractions({
+    run: () => runId && cancelledRunId !== runId ? { id: runId, conversationId: activeConversationId } : undefined,
+    session: () => activeSession,
+    prepare: prepareMessage,
+    emit,
+  });
+
+  const plans = yield* Effect.promise(() => createPlanTool({
+    botDirectory: botDir,
+    getContext: () => ({ conversationId: activeConversationId, runId: cancelledRunId === runId ? undefined : runId }),
+    emit: (plan) => emit(EventPayload.cases.PlanUpdated.make({ plan }), plan.conversationId),
+  }));
+
+  const bindExtensions = async (session: AgentSession) => {
+    const runner = session.extensionRunner;
+
+    if (!runner) throw new Error("The agent extension runtime did not initialize.");
+    await session.bindExtensions({ mode: "rpc", uiContext: interactions.ui(runner.getUIContext()) });
+    session.setActiveToolsByName([...session.getActiveToolNames(), "grep", "find", "ls", "codemode"]);
+  };
+
   const tools: ToolDefinition[] = computerEnabled
     ? [
         {
@@ -270,9 +316,26 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       },
     });
 
+  tools.push({
+    name: "ask_user",
+    label: "Ask a question",
+    description: "Ask the user one to three questions when their answer is needed. Each question can offer choices; free text is always accepted. Wait for the result. Never invent skipped, expired or redirected answers, and never use this tool to approve consequential actions.",
+    parameters: Type.Object({ questions: Type.Array(Type.Object({
+      id: Type.String({ pattern: "^[a-zA-Z0-9_-]{1,64}$" }),
+      question: Type.String({ minLength: 1, maxLength: 2_000 }),
+      options: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 6 })),
+    }), { minItems: 1, maxItems: 3 }) }),
+    async execute(_id, input, signal) {
+      const parsed = Schema.decodeUnknownSync(Schema.Struct({ questions: UserQuestions }))(input);
+      const result = await interactions.ask(parsed.questions, signal);
+
+      return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
+    },
+  });
+  tools.push(plans.tool);
+
   const settingsManager = SettingsManager.create(workspace, agentDir);
   settingsManager.setCacheWarmingMode("off");
-  settingsManager.applyOverrides({ defaultTools: ["+codemode"] });
 
   const makeLoader = () => new DefaultResourceLoader({
     cwd: workspace,
@@ -284,7 +347,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     noThemes: true,
     noContextFiles: true,
     systemPrompt:
-      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover integrations through Executor. Consequential tools wait for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
+      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover integrations through Executor. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Consequential tools wait for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
     extensionFactories: [
       createCodemodeExtension({ mode: "on", models: false }),
       createMcpExtension({
@@ -313,6 +376,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
               "computer_info",
               "computer_capture",
               "browser_read",
+              "ask_user",
+              "update_plan",
             ].includes(event.toolName)
           )
             return;
@@ -362,8 +427,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     }),
   );
 
-  let activeSession = created.session;
-  yield* Effect.promise(() => activeSession.bindExtensions({}));
+  activeSession = created.session;
+  yield* Effect.promise(() => bindExtensions(activeSession));
 
   const messageFromAssistant = () => {
     const last = activeSession.state.messages
@@ -390,6 +455,14 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   };
 
   const bindSession = () => activeSession.subscribe((event) => {
+    if (event.type === "queue_update") interactions.queueChanged(event.steering, event.followUp);
+
+    if (event.type === "compaction_start" && runId)
+      emit(EventPayload.cases.RunActivity.make({ runId, phase: "compacting" }));
+
+    if (event.type === "compaction_end" && runId)
+      emit(EventPayload.cases.RunActivity.make({ runId, phase: event.willRetry ? "retrying" : "thinking" }));
+
     if (event.type === "message_start" && event.message.role === "assistant") {
       if (runId) emit(EventPayload.cases.RunActivity.make({ runId, phase: "thinking" }));
       assistantId = `assistant-${event.message.timestamp}`;
@@ -435,7 +508,21 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
         }),
       );
 
-    if (event.type === "tool_execution_end")
+    if (event.type === "tool_execution_update" && Date.now() - (progressTimes.get(event.toolCallId) ?? 0) >= 250) {
+      const partial = Schema.decodeUnknownResult(ProgressResult)(event.partialResult);
+
+      if (Result.isSuccess(partial)) {
+        const text = partial.success.content.slice(-8).flatMap((part) => part.type === "text" && part.text ? [part.text.slice(-2_000)] : []).join("\n").slice(-2_000);
+
+        if (text) {
+          progressTimes.set(event.toolCallId, Date.now());
+          emit(EventPayload.cases.ToolProgress.make({ toolCallId: event.toolCallId, name: event.toolName, text }));
+        }
+      }
+    }
+
+    if (event.type === "tool_execution_end") {
+      progressTimes.delete(event.toolCallId);
       emit(
         EventPayload.cases.ToolEnd.make({
           toolCallId: event.toolCallId,
@@ -444,6 +531,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
           output: json(JSON.stringify(event.result)),
         }),
       );
+    }
 
     if (event.type === "message_end" && event.message.role === "assistant") {
       messageFromAssistant();
@@ -494,7 +582,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     });
 
     try {
-      await next.session.bindExtensions({});
+      await bindExtensions(next.session);
     } catch (error) {
       next.session.dispose();
       throw error;
@@ -512,6 +600,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
   const cancel = async () => {
     cancelledRunId = runId;
+
+    if (runId) interactions.clear({ id: runId, conversationId: activeConversationId });
 
     for (const [requestId, approval] of approvals) {
       clearTimeout(approval.timer);
@@ -549,24 +639,10 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     try {
       if (!modelRuntime.isUsingSubscription("openai"))
         throw new Error("Sign in with your ChatGPT subscription before sending a message.");
-      let text = message.text;
-      const images: { type: "image"; data: string; mimeType: string }[] = [];
-
-      for (const attachment of message.attachments ?? []) {
-        if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(attachment.mimeType))
-          images.push({ type: "image", data: attachment.data, mimeType: attachment.mimeType });
-        else {
-          const path = join(
-            workspace,
-            `${crypto.randomUUID()}-${attachment.name.replace(/[^a-zA-Z0-9_.-]/g, "_")}`,
-          );
-
-          await writeFile(path, Buffer.from(attachment.data, "base64"), { mode: 0o600 });
-          text += `\nAttached file: ${path}`;
-        }
-      }
-
+      const { text, images } = await prepareMessage(message);
       await activeSession.prompt(text, { images, expandPromptTemplates: false });
+      await interactions.waitForInputs();
+      interactions.clear({ id, conversationId: activeConversationId });
 
       const last = activeSession.state.messages
         .slice()
@@ -583,6 +659,9 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
         throw new Error(last.errorMessage || "Provider request failed");
       else emit(EventPayload.cases.RunCompleted.make({ runId: id }));
     } catch (error) {
+      await interactions.waitForInputs();
+      interactions.clear({ id, conversationId: activeConversationId });
+
       if (cancelledRunId === id) emit(EventPayload.cases.RunCancelled.make({ runId: id }));
       else emit(
         EventPayload.cases.RunFailed.make({
@@ -605,6 +684,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       if (provider === "executor") {
         await executor.login(controller.signal);
         await activeSession.reload();
+        activeSession.setActiveToolsByName([...activeSession.getActiveToolNames(), "grep", "find", "ls", "codemode"]);
       } else
         await modelRuntime.login(
           "openai",
@@ -691,7 +771,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       try: async () => {
         // Keep the transcript and its IPC event cursor in the same synchronous turn.
         if (ChildCommand.isAnyOf(["Messages"])(request.command)) {
-          const value = readMessages(request.command.conversationId ?? "direct");
+          const conversationId = request.command.conversationId ?? "direct";
+          const value = json(JSON.stringify({ messages: readMessages(conversationId), plan: plans.snapshot(conversationId) }));
           output(ChildOutput.cases.Response.make({ id: request.id, value }));
 
           return;
@@ -700,7 +781,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
         const value = await ChildCommand.match<Promise<Schema.Schema.Type<typeof Schema.Json>>>(
           request.command,
           {
-            Messages: async (command) => readMessages(command.conversationId ?? "direct"),
+            Messages: async (command) => ({ messages: readMessages(command.conversationId ?? "direct"), plan: plans.snapshot(command.conversationId ?? "direct") }),
             ForgetConversation: async (command) => {
               if (command.conversationId === "direct") throw new Error("The direct conversation cannot be deleted here.");
 
@@ -708,6 +789,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
                 if (runId || auth) throw new Error("Wait for this bot to become idle before deleting its conversation.");
                 await switchConversation("direct");
               }
+
+              plans.forget(command.conversationId);
 
               return { forgotten: true };
             },
@@ -727,13 +810,9 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
               if (runId && (command.conversationId ?? "direct") !== activeConversationId)
                 throw new Error("The active run belongs to another conversation.");
 
-              if (runId && command.runId && command.runId !== runId)
+              if (command.runId && command.runId !== runId)
                 throw new Error("The requested run is no longer active.");
-              const knownRun = runId;
               await cancel();
-
-              if (!knownRun && command.runId)
-                emit(EventPayload.cases.RunCancelled.make({ runId: command.runId }), command.conversationId ?? "direct");
 
               return { cancelled: true };
             },
@@ -770,6 +849,12 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
               return { accepted: true };
             },
+            QuestionResponse: async (command) => {
+              interactions.answer(command.requestId, command, command.conversationId ?? "direct");
+
+              return { accepted: true };
+            },
+            QueueInput: async (command) => interactions.queueInput(command, command.conversationId ?? "direct"),
             ComputerResult: async (command) => {
               const pending = computerCalls.get(command.requestId);
 

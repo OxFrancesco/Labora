@@ -8,6 +8,8 @@ import type { LinkedBot } from "./use-labora";
 import { computerClient } from "./client";
 import { Button, Icon, Label } from "./icons";
 import { color, font } from "./theme";
+import { AgentPlan, AgentQuestion } from "./agent-input";
+import { avatarActivityLabels } from "./avatar-motion";
 
 const fieldStyle = {
   width: "100%", padding: 10, borderRadius: 8, color: color.text,
@@ -71,8 +73,9 @@ function RoutineResults({ selected, routine, close }: { selected: LinkedBot; rou
   }
 
   const approval = snapshot?.pending.find(EventPayload.isAnyOf(["ApprovalRequested"]));
+  const question = snapshot?.pending.find(EventPayload.isAnyOf(["QuestionRequested"]));
 
-  return <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flexGrow: 1, gap: 12 }}>
+  return <div testId="routine-conversation" style={{ display: "flex", flexDirection: "column", minHeight: 0, flexGrow: 1, gap: 12 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <Button id="routine-results-back" label="Back to routine" icon="back" onClick={close} />
       <Label>{routine.name}</Label>
@@ -84,6 +87,15 @@ function RoutineResults({ selected, routine, close }: { selected: LinkedBot; rou
         <Label secondary size={11}>{message.role === "user" ? "Instruction" : selected.bot.name} · {new Date(message.createdAt).toLocaleTimeString()}</Label>
         <markdown source={message.text} style={{ color: color.text, fontFamily: font, fontSize: 13, lineHeight: 20 }} />
       </div>)}
+      {snapshot?.plan ? <AgentPlan plan={snapshot.plan} /> : null}
+      {snapshot?.activity && snapshot.activity.phase !== "idle" ? <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <Label size={12} secondary>{avatarActivityLabels[snapshot.activity.phase]}</Label>
+        {snapshot.activity.message && (snapshot.activity.phase === "working" || snapshot.activity.phase === "failed") ? <div testId="routine-tool-progress" style={{ maxHeight: 96, overflowY: "scroll" }}><Label size={12} secondary>{snapshot.activity.message}</Label></div> : null}
+      </div> : null}
+      {question ? <AgentQuestion key={question.requestId} question={question} answer={async (requestId, runId, answers) => {
+        await computerClient(selected.connection).answerQuestion(selected.bot.id, requestId, { runId, answers }, conversationId);
+        setRevision((value) => value + 1);
+      }} /> : null}
       {approval ? <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, backgroundColor: color.surface }}>
         <Label size={13}>Allow {approval.toolName}?</Label>
         <Label size={12} secondary>{JSON.stringify(approval.input, null, 2)}</Label>
@@ -93,7 +105,7 @@ function RoutineResults({ selected, routine, close }: { selected: LinkedBot; rou
         </div>
       </div> : null}
     </div>
-    {snapshot?.busy ? <Button id="routine-stop" label="Stop routine run" icon="stop" onClick={() => { void act(computerClient(selected.connection).cancel(selected.bot.id, conversationId)); }} style={{ gap: 8, marginBottom: 14 }}><Label>Stop</Label></Button> : null}
+    {snapshot?.busy && snapshot.activity?.runId ? <Button id="routine-stop" label="Stop routine run" icon="stop" onClick={() => { void act(computerClient(selected.connection).cancel(selected.bot.id, conversationId, snapshot.activity?.runId)); }} style={{ gap: 8, marginBottom: 14 }}><Label>Stop</Label></Button> : null}
   </div>;
 }
 

@@ -76,3 +76,9 @@ The final standalone build passed the same seven real ChatGPT checks with its pa
 `evidence/installed-hydra-motion-20261002/result.json` confirms all 256 entries of the installed `~/Applications/Labora.app` match the tested bundle, with deep strict signature and runtime checks. The previous installed app is retained as a hidden backup. This file comparison establishes installed artifact identity; the visible UI tests ran the packaged build in an isolated profile, and the default profile remains separate.
 
 Reduce Motion and inactive-app handling are implemented but were not verified by changing global system preferences. ChatGPT authorization and model use in the Cloudflare bot remain separate and unverified; the successful Hydra runs are local.
+
+## Agent questions, queued input, and plans
+
+The expanded `artifacts/streaming-e2e/result.json` records 18 passing checks with real Pi workers and a controlled local provider. It verifies actual tool declarations, run-scoped questions and replies, steering attachments, idempotent retries, stale input and Stop rejection, private plan persistence, direct/routine isolation, and incremental terminal output. Identical queued text with different images preserves FIFO delivery and the remaining attachment metadata. Actual `grep`, `find`, and `ls` calls return expected files under the packaged minimal PATH; empty per-bot `rg`/`fd` caches bootstrap successfully from GitHub. This is not a real subscription request.
+
+The native `scripts/verify-agent-controls.ts` walkthrough checks the next Pi request for exact answers, steering and follow-up ordering, queue restoration, redirected/skipped questions, and Stop clearing. It also exercises a deliberately lost HTTP acknowledgement so retrying the same native draft cannot duplicate the queued message. The original source run passed functional checks but captured some avatars before their first rendered frame; it is not the final visual evidence.

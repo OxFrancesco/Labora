@@ -14,6 +14,7 @@ import { avatarActivityLabels } from "./avatar-motion";
 import { readClipboard } from "./clipboard";
 import { useLabora } from "./use-labora";
 import { useVoiceInput } from "./voice-input";
+import { AgentPlan, AgentQuestion, QueuedInputs } from "./agent-input";
 import type { DesktopStore } from "./use-labora";
 
 type Tab = "Details" | "Library" | "Computer";
@@ -31,6 +32,7 @@ export function App({ store }: AppProps) {
   const [tab, setTab] = useState<Tab>("Details");
   const [dialog, setDialog] = useState<Dialog>("none");
   const [composerMenu, setComposerMenu] = useState(false);
+  const [inputMode, setInputMode] = useState<"steer" | "followUp">("steer");
   const [expandedComputer, setExpandedComputer] = useState(false);
   const [routineOpen, setRoutineOpen] = useState(false);
   const drag = useRef<{ x: number; width: number } | null>(null);
@@ -50,6 +52,8 @@ export function App({ store }: AppProps) {
   useEffect(() => {
     if ((expandedComputer || dialog !== "none") && recording) voice.cancel();
   }, [expandedComputer, dialog, recording, voice.cancel]);
+
+  useEffect(() => { setInputMode("steer"); }, [selected?.key, labora.busy]);
 
   function insertTranscript() {
     const transcript = voice.accept();
@@ -385,13 +389,18 @@ export function App({ store }: AppProps) {
                   </Button>
                 </div>
               ) : null}
+              {labora.plan ? <AgentPlan plan={labora.plan} /> : null}
               {labora.botActivity.phase !== "idle" ? (
                 <div testId="bot-activity" role="status" aria-label={avatarActivityLabels[labora.botActivity.phase]} style={{ paddingTop: 12, paddingBottom: 12 }}>
                   <Label secondary style={{ color: labora.botActivity.phase === "failed" ? color.error : color.secondary }}>
                     {avatarActivityLabels[labora.botActivity.phase]}
                   </Label>
+                  {labora.botActivity.phase === "working" && labora.botActivity.message ? <div testId="tool-progress" style={{ maxHeight: 96, overflowY: "scroll", marginTop: 6 }}>
+                    <Label size={12} secondary>{labora.botActivity.message}</Label>
+                  </div> : null}
                 </div>
               ) : null}
+              {labora.question ? <AgentQuestion key={labora.question.requestId} question={labora.question} answer={labora.answerQuestion} /> : null}
               {labora.approval ? (
                 <div
                   style={{
@@ -518,6 +527,11 @@ export function App({ store }: AppProps) {
                   </div>
                 </div>
               ) : null}
+              <QueuedInputs items={labora.queuedInputs} />
+              {labora.busy ? <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                <Button id="input-mode-steer" label="Update task after the current step" active={inputMode === "steer"} onClick={() => setInputMode("steer")}><Label size={12}>After current step</Label></Button>
+                <Button id="input-mode-follow-up" label="Send after this task" active={inputMode === "followUp"} onClick={() => setInputMode("followUp")}><Label size={12}>After this task</Label></Button>
+              </div> : null}
               <div
                 style={{
                   display: "flex",
@@ -547,14 +561,14 @@ export function App({ store }: AppProps) {
                   testId="composer"
                   aria-label="Prompt"
                   value={labora.draft.text}
-                  placeholder={`Message ${bot?.name ?? "Bot"}`}
+                  placeholder={labora.busy ? inputMode === "steer" ? "Update this task…" : "Message after this task…" : `Message ${bot?.name ?? "Bot"}`}
                   onKeyDown={(event) => {
                     if (dialog === "none" && event.modifiers?.cmd && event.key === "v") labora.attempt(pasteAttachments());
                   }}
                   onChange={(event) =>
                     labora.changeDraft({ ...labora.draft, text: event.value ?? "" })
                   }
-                  onSubmit={() => { if (!recording) labora.attempt(labora.send()); }}
+                  onSubmit={() => { if (!recording) labora.attempt(labora.send(inputMode)); }}
                   minRows={1}
                   maxRows={8}
                   style={{
@@ -586,15 +600,16 @@ export function App({ store }: AppProps) {
                     onClick={() => labora.attempt(labora.cancel())}
                     style={{ width: 30, height: 30, borderRadius: 16, backgroundColor: "#eeeeee" }}
                   />
-                ) : (
+                ) : null}
+                {!labora.busy || labora.draft.text.trim() || labora.draft.paths.length ? (
                   <Button
                     id="send"
-                    label="Send message"
+                    label={labora.busy ? inputMode === "steer" ? "Send task update" : "Queue follow-up" : "Send message"}
                     icon="send"
-                    onClick={() => { if (!recording) labora.attempt(labora.send()); }}
+                    onClick={() => { if (!recording) labora.attempt(labora.send(inputMode)); }}
                     style={{ width: 30, height: 30, borderRadius: 16, backgroundColor: recording ? "#555555" : "#eeeeee" }}
                   />
-                )}
+                ) : null}
               </div>
               {composerMenu ? (
                 <div style={{ display: "flex", gap: 8 }}>

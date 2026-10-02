@@ -54,7 +54,7 @@ On macOS, grant Screen Recording and Accessibility to **Labora Computer** from i
 
 Create a bot on a connected computer, then open **Connect apps**. ChatGPT uses the new subscription sign-in flow. Executor uses the bot's own OAuth connection to `https://executor.sh/labora/mcp`. `LABORA_EXECUTOR_URL` changes the endpoint for another organization; `LABORA_OPENAI_MODEL` selects the model, defaulting to `gpt-5.5`.
 
-The agent streams its messages and tool activity to the client. Characters show thinking, writing, tool use, approval waiting, retrying, completion, failure, cancellation, and reconnecting. Idle characters breathe and blink in Details. macOS Reduce Motion keeps distinct static poses, and background windows stop repeating animation frames. Background bot status does not start an idle Pi process.
+The agent streams its messages and tool activity to the client. Characters show thinking, writing, tool use, questions, approval waiting, context compaction, retrying, completion, failure, cancellation, and reconnecting. Idle characters breathe and blink in Details. macOS Reduce Motion keeps distinct static poses, and background windows stop repeating animation frames. Background bot status does not start an idle Pi process.
 
 Executor operations requiring approval pause for a user decision. Files created in the bot's workspace appear in Library. Desktop control has explicit user/agent ownership and rejects input using stale frames or a different display.
 
@@ -68,6 +68,16 @@ Each bot keeps its own application registration. To connect a different ChatGPT 
 
 Personal computers are trusted hosts. Separate bot directories and processes do not sandbox terminal access to that host. Cloudflare desktops instead run in their own containers. See [Cloudflare setup](cloud/README.md) and the [subscription eligibility findings](research/pi-chatgpt.md) before offering a shared hosted service.
 
+## Working with an agent
+
+The model can call `ask_user` with up to three questions, optional choices, and free-text answers. Questions appear in the conversation and remain available after reconnecting. Answer them or choose Skip; questions expire after five minutes. They are separate from permissions and cannot approve a tool action.
+
+You can keep typing while the agent works. **After current step** steers its next model turn after the current response and tool calls. **After this task** queues a follow-up until the current work finishes. Both support attachments. Accepted messages stay visible while queued. Steering dismisses a pending model question as redirected, but never approves a consequential tool. Stop cancels the run and clears its questions and queued messages. Inputs target the exact bot, conversation, and run; rejected sends preserve the draft.
+
+`update_plan` records a short checklist for multi-step work, with one active step at a time. Plans persist with their conversation. Terminal/tool output appears incrementally, and automatic context compaction has its own activity state.
+
+The baseline tools include file/image reading, writing and editing, `bash`, `grep`, `find`, directory listing, code mode, and Executor integration discovery. Computer tools depend on the connected companion's capabilities. Cloud browser reads return public HTTPS pages through Kitesurf; personal companions can use an appropriate Executor integration. A general web-search provider and interactive terminal sessions are not bundled. Search tools download `rg` and `fd` from their official GitHub releases into each bot's private tool cache on first use, so that first use needs network access.
+
 ## Verify
 
 ```sh
@@ -77,9 +87,12 @@ bun src/backend/verify.ts
 bun run verify:desktop --source
 bun run build:desktop
 bun run verify:desktop
+bun scripts/verify-agent-controls.ts --source
 ```
 
 The native verification records real pairing, bot creation, persistence, file operations, clipboard attachments, and panel interactions. It uses isolated local state and does not substitute a fake model response or desktop capture. Linux desktop verification is in `scripts/computer-e2e-linux.ts`.
+
+The separate agent-controls verifier uses a controlled local Responses provider with real Pi workers and the native UI. It checks the inputs received by subsequent model requests. `bun scripts/verify-live-agent-controls.ts` uses the already authenticated local Hydra bot and the packaged native app, companion, and worker; it sends actual subscription requests and preserves credentials under `.labora`.
 
 The bounded CLI remains available for diagnosing an integration:
 

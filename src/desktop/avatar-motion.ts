@@ -1,9 +1,11 @@
 export type AvatarActivity =
   | "idle"
   | "thinking"
+  | "compacting"
   | "streaming"
   | "working"
   | "waiting"
+  | "asking"
   | "retrying"
   | "complete"
   | "failed"
@@ -22,9 +24,11 @@ export interface AvatarPose {
 export const avatarActivityLabels: Record<AvatarActivity, string> = {
   idle: "Ready",
   thinking: "Thinking",
+  compacting: "Tidying context",
   streaming: "Writing",
   working: "Using tools",
   waiting: "Waiting for approval",
+  asking: "Waiting for your answer",
   retrying: "Retrying",
   complete: "Complete",
   failed: "Needs attention",
@@ -51,6 +55,7 @@ export function avatarPose(activity: AvatarActivity, elapsed: number, reducedMot
 
   switch (activity) {
     case "thinking":
+    case "compacting":
       pose.yaw = -0.1;
       pose.pitch = -0.16;
       pose.roll = -0.06;
@@ -63,6 +68,7 @@ export function avatarPose(activity: AvatarActivity, elapsed: number, reducedMot
       pose.stretch = 0.98;
       break;
     case "waiting":
+    case "asking":
       pose.yaw = 0.04;
       pose.roll = 0.13;
       break;
@@ -104,6 +110,7 @@ export function avatarPose(activity: AvatarActivity, elapsed: number, reducedMot
 
       break;
     case "thinking":
+    case "compacting":
       pose.yaw += Math.sin(elapsed / 2_400 * turn) * 0.07;
       pose.roll += Math.sin(elapsed / 2_400 * turn) * 0.025;
       pose.eyeOpen = blink(elapsed, 3_200);
@@ -123,6 +130,7 @@ export function avatarPose(activity: AvatarActivity, elapsed: number, reducedMot
     }
 
     case "waiting":
+    case "asking":
       pose.eyeOpen = blink(elapsed);
       break;
     case "retrying":
@@ -163,5 +171,5 @@ export function avatarFrameInterval(activity: AvatarActivity, small: boolean, el
 
   if (activity === "complete" && elapsed >= 300 || activity === "failed" && elapsed >= 280 || activity === "cancelled" && elapsed >= 200) return Infinity;
 
-  return activity === "idle" || activity === "waiting" ? 80 : small ? 80 : 50;
+  return activity === "idle" || activity === "waiting" || activity === "asking" ? 80 : small ? 80 : 50;
 }

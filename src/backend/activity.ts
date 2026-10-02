@@ -4,11 +4,13 @@ import { BotActivity, EventPayload } from "./contracts";
 export const idleActivity = (): BotActivity => ({ phase: "idle", tools: [], approvalIds: [] });
 
 export function reduceActivity(current: BotActivity, payload: EventPayload): BotActivity {
+  const questionIds = current.questionIds ?? [];
+
   if (EventPayload.isAnyOf(["RunStarted"])(payload))
     return { phase: "thinking", runId: payload.runId, tools: [], approvalIds: [] };
 
   if (EventPayload.isAnyOf(["ProcessExited"])(payload))
-    return { ...current, phase: "failed", tools: [], approvalIds: [], message: payload.message };
+    return { ...current, phase: "failed", tools: [], approvalIds: [], questionIds: [], message: payload.message };
 
   if (EventPayload.isAnyOf(["RunCompleted", "RunCancelled", "RunFailed"])(payload)) {
     if (current.runId && current.runId !== payload.runId) return current;
@@ -36,10 +38,19 @@ export function reduceActivity(current: BotActivity, payload: EventPayload): Bot
     const activity: BotActivity = {
       ...previous,
       runId: payload.runId,
-      phase: current.approvalIds.length ? "waiting" : current.tools.length ? "working" : payload.phase,
+      phase: current.approvalIds.length ? "waiting" : questionIds.length ? "asking" : current.tools.length ? "working" : payload.phase,
     };
 
     return payload.message === undefined ? activity : { ...activity, message: payload.message };
+  }
+
+  if (EventPayload.isAnyOf(["QuestionRequested"])(payload))
+    return { ...current, phase: current.approvalIds.length ? "waiting" : "asking", questionIds: [...new Set([...questionIds, payload.requestId])] };
+
+  if (EventPayload.isAnyOf(["QuestionResolved"])(payload)) {
+    const remaining = questionIds.filter((id) => id !== payload.requestId);
+
+    return { ...current, questionIds: remaining, phase: current.approvalIds.length ? "waiting" : remaining.length ? "asking" : current.tools.length ? "working" : "thinking" };
   }
 
   if (EventPayload.isAnyOf(["ApprovalRequested"])(payload))
@@ -48,26 +59,30 @@ export function reduceActivity(current: BotActivity, payload: EventPayload): Bot
   if (EventPayload.isAnyOf(["ApprovalResolved"])(payload)) {
     const approvalIds = current.approvalIds.filter((id) => id !== payload.requestId);
 
-    return { ...current, approvalIds, phase: approvalIds.length ? "waiting" : current.tools.length ? "working" : "thinking" };
+    return { ...current, approvalIds, phase: approvalIds.length ? "waiting" : questionIds.length ? "asking" : current.tools.length ? "working" : "thinking" };
   }
 
   if (EventPayload.isAnyOf(["ToolStart"])(payload))
     return {
       ...current,
-      phase: current.approvalIds.length ? "waiting" : "working",
+      phase: current.approvalIds.length ? "waiting" : questionIds.length ? "asking" : "working",
       tools: [...current.tools.filter((tool) => tool.id !== payload.toolCallId), { id: payload.toolCallId, name: payload.name }],
     };
 
+  if (EventPayload.isAnyOf(["ToolProgress"])(payload))
+    return current.tools.some((tool) => tool.id === payload.toolCallId) ? { ...current, message: payload.text } : current;
+
   if (EventPayload.isAnyOf(["ToolEnd"])(payload)) {
     const tools = current.tools.filter((tool) => tool.id !== payload.toolCallId);
+    const { message: _message, ...previous } = current;
 
-    return { ...current, tools, phase: current.approvalIds.length ? "waiting" : tools.length ? "working" : "thinking" };
+    return { ...previous, tools, phase: current.approvalIds.length ? "waiting" : questionIds.length ? "asking" : tools.length ? "working" : "thinking" };
   }
 
   if (EventPayload.isAnyOf(["TextDelta"])(payload)) {
     const { message: _message, ...previous } = current;
 
-    return { ...previous, phase: current.approvalIds.length ? "waiting" : current.tools.length ? "working" : "streaming" };
+    return { ...previous, phase: current.approvalIds.length ? "waiting" : questionIds.length ? "asking" : current.tools.length ? "working" : "streaming" };
   }
 
   return current;

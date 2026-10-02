@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { copyFile, mkdir } from "node:fs/promises";
 import { EventPayload, isConversationEvent } from "../backend/contracts";
 import type { BotActivity } from "../backend/contracts";
+import type { PlanState } from "../backend/plan-contracts";
 import { idleActivity, reduceActivity } from "../backend/activity";
 import { reduceMessages } from "./conversation-state";
 import type {
@@ -11,6 +12,8 @@ import type {
   Bot,
   Message,
   Provider,
+  QuestionResponse,
+  QueuedInput,
   UpdateBot,
 } from "../backend/contracts";
 import { computerClient, pairComputer } from "./client";
@@ -43,6 +46,10 @@ export function useLabora(store: DesktopStore) {
   const [messages, setMessages] = useState<readonly Message[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [directRunId, setDirectRunId] = useState<string>();
+  const [questions, setQuestions] = useState<Extract<EventPayload, { _tag: "QuestionRequested" }>[]>([]);
+  const [queuedInputs, setQueuedInputs] = useState<readonly QueuedInput[]>([]);
+  const [plan, setPlan] = useState<PlanState | null>(null);
   const [activity, setActivity] = useState("");
   const [botActivities, setBotActivities] = useState<ReadonlyMap<string, BotActivity>>(new Map());
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -55,6 +62,7 @@ export function useLabora(store: DesktopStore) {
   const draft = preferences.drafts.find((item) => item.key === key) ?? { key, text: "", paths: [] };
   const currentSelection = useRef(selected);
   const sending = useRef(new Set<string>());
+  const queuedAttempts = useRef(new Map<string, { signature: string; id: string }>());
   const authStarts = useRef(new Map<string, Promise<void>>());
   const authCancellations = useRef(new Map<string, Promise<void>>());
   const authVersions = useRef(new Map<string, number>());
@@ -120,6 +128,10 @@ export function useLabora(store: DesktopStore) {
     setAuth(null);
     setApprovals([]);
     setBusy(false);
+    setDirectRunId(undefined);
+    setQuestions([]);
+    setQueuedInputs([]);
+    setPlan(null);
     setActivity("");
     setAuthLink("");
     setAuthQuestion(null);
@@ -145,24 +157,35 @@ export function useLabora(store: DesktopStore) {
         Message: () => undefined,
         TextDelta: () => undefined,
         RunActivity: () => undefined,
-        RunStarted: () => {
+        RunStarted: ({ runId }) => {
           setBusy(true);
+          setDirectRunId(runId);
           setError("");
         },
         RunCompleted: () => {
           setBusy(false);
+          setDirectRunId(undefined);
+          setQuestions([]);
+          setQueuedInputs([]);
           setActivity("");
         },
         RunCancelled: () => {
           setBusy(false);
+          setDirectRunId(undefined);
+          setQuestions([]);
+          setQueuedInputs([]);
           setActivity("");
         },
         RunFailed: ({ message }) => {
           setBusy(false);
+          setDirectRunId(undefined);
+          setQuestions([]);
+          setQueuedInputs([]);
           setActivity("");
           setError(message);
         },
         ToolStart: () => undefined,
+        ToolProgress: () => undefined,
         ToolEnd: () => undefined,
         AuthLink: ({ url, provider }) => {
           setAuthLink(url);
@@ -196,8 +219,17 @@ export function useLabora(store: DesktopStore) {
           ]),
         ApprovalResolved: ({ requestId }) =>
           setApprovals((current) => current.filter((item) => item.requestId !== requestId)),
+        QuestionRequested: (question) => setQuestions((current) => [
+          ...current.filter((item) => item.requestId !== question.requestId), question,
+        ]),
+        QuestionResolved: ({ requestId }) => setQuestions((current) => current.filter((item) => item.requestId !== requestId)),
+        InputQueueChanged: ({ items }) => setQueuedInputs(items),
+        PlanUpdated: ({ plan }) => setPlan(plan),
         ProcessExited: ({ message }) => {
           setBusy(false);
+          setDirectRunId(undefined);
+          setQuestions([]);
+          setQueuedInputs([]);
           setActivity("");
           setApprovals([]);
           setAuthLink("");
@@ -215,6 +247,10 @@ export function useLabora(store: DesktopStore) {
       streamedMessages = history.messages;
       setMessages(streamedMessages);
       setBusy(history.busy);
+      setDirectRunId(history.busy ? history.activity?.runId : undefined);
+      setQuestions([]);
+      setQueuedInputs([]);
+      setPlan(history.plan ?? null);
       updateActivity(history.botActivity ?? history.activity ?? (history.busy ? { ...idleActivity(), phase: "thinking" } : idleActivity()));
       setActivity((history.activity?.tools ?? []).map((tool) => tool.name).join(", "));
       setApprovals([]);
@@ -399,21 +435,24 @@ export function useLabora(store: DesktopStore) {
     setBots((current) => current.filter((item) => item.connection.id !== connection.id));
   }
 
-  async function send() {
+  async function send(mode: "steer" | "followUp" = "steer") {
     if (!selected) throw new Error("Connect a computer and create a bot first.");
+    const target = selected;
+    const targetKey = key;
+    const submitted = draft;
+    const currentRunId = directRunId;
 
     if (
-      busy ||
-      sending.current.has(key) ||
-      authCancellations.current.has(key) ||
-      (!draft.text.trim() && !draft.paths.length)
+      sending.current.has(targetKey) ||
+      authCancellations.current.has(targetKey) ||
+      (!submitted.text.trim() && !submitted.paths.length)
     )
       return;
-    sending.current.add(key);
+    sending.current.add(targetKey);
 
     try {
       const attachments = await Promise.all(
-        draft.paths.map(async (path) => {
+        submitted.paths.map(async (path) => {
           const file = Bun.file(path);
 
           return {
@@ -424,24 +463,41 @@ export function useLabora(store: DesktopStore) {
         }),
       );
 
-      await computerClient(selected.connection).send(selected.bot.id, {
-        text: draft.text,
-        attachments,
-      });
+      if (busy) {
+        if (!currentRunId) throw new Error("This task changed. Wait for it to reconnect, then send your update again.");
+        const signature = JSON.stringify({ runId: currentRunId, mode, text: submitted.text, paths: submitted.paths });
+        const previous = queuedAttempts.current.get(targetKey);
+        const id = previous?.signature === signature ? previous.id : crypto.randomUUID();
+        queuedAttempts.current.set(targetKey, { signature, id });
+        await computerClient(target.connection).queueInput(target.bot.id, {
+          id, runId: currentRunId, mode, text: submitted.text, attachments,
+        });
+        queuedAttempts.current.delete(targetKey);
+      } else {
+        await computerClient(target.connection).send(target.bot.id, {
+          text: submitted.text,
+          attachments,
+        });
+      }
+
+      if (isCurrent(target)) setError("");
+
       setPreferences((current) => ({
         ...current,
         drafts: current.drafts.map((item) =>
-          item.key === key
+          item.key === targetKey
             ? {
                 ...item,
-                text: item.text === draft.text ? "" : item.text,
-                paths: item.paths.filter((path) => !draft.paths.includes(path)),
+                text: item.text === submitted.text ? "" : item.text,
+                paths: item.paths.filter((path) => !submitted.paths.includes(path)),
               }
             : item,
         ),
       }));
+    } catch (reason) {
+      if (isCurrent(target)) throw reason;
     } finally {
-      sending.current.delete(key);
+      sending.current.delete(targetKey);
     }
   }
 
@@ -454,7 +510,7 @@ export function useLabora(store: DesktopStore) {
   }
 
   async function cancel() {
-    if (selected) await computerClient(selected.connection).cancel(selected.bot.id);
+    if (selected && directRunId) await computerClient(selected.connection).cancel(selected.bot.id, "direct", directRunId);
   }
 
   async function signIn(provider: Provider) {
@@ -534,6 +590,12 @@ export function useLabora(store: DesktopStore) {
       );
   }
 
+  async function answerQuestion(requestId: string, runId: string, answers: QuestionResponse["answers"]) {
+    if (!selected) return;
+    const target = selected;
+    await computerClient(target.connection).answerQuestion(target.bot.id, requestId, { runId, answers });
+  }
+
   function updatePreferences(update: Partial<Preferences>) {
     setPreferences((current) => ({ ...current, ...update }));
   }
@@ -549,6 +611,9 @@ export function useLabora(store: DesktopStore) {
     error,
     setError,
     busy,
+    question: questions[0],
+    queuedInputs,
+    plan,
     activity,
     botActivities,
     botActivity: botActivities.get(key) ?? idleActivity(),
@@ -567,6 +632,7 @@ export function useLabora(store: DesktopStore) {
     signIn,
     answerAuth,
     answerApproval,
+    answerQuestion,
     addAttachments,
     attempt,
     refresh,
