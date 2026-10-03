@@ -23,6 +23,8 @@ export function ActivityIcon({ name, tint = color.secondary }: { name: ActivityI
 export function toolIcon(message: Message): ActivityIconName {
   if (message.role === "thinking") return "brain";
 
+  if (message.toolName === "update_plan") return "tasks";
+
   if (message.toolName === "bash") return "terminal";
 
   if (/read|write|edit/.test(message.toolName ?? "")) return "file";
@@ -43,7 +45,7 @@ export const WorkRow = memo(function WorkRow({ id, label, icon, active = false, 
       onClick={toggle} onKeyDown={(event) => { if (event.key === "enter" || event.key === "space") toggle?.(); }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} onFocus={() => setHover(true)} onBlur={() => setHover(false)}
       style={{ width: "100%", minWidth: 0, minHeight: 24, paddingLeft: 2, paddingRight: 2, display: "flex", alignItems: "center", gap: 6, borderRadius: 6, userSelect: "none", cursor: toggle ? "pointer" : "default", hover: { backgroundColor: toggle ? "#ffffff08" : "transparent" } }}>
-      <div style={{ flexGrow: 1, minWidth: 0 }}>
+      <div style={{ flexGrow: 1, minWidth: 0, display: "flex" }}>
         <ActivityShimmer active={active && !failed}>{(highlighted) => <div style={{ display: "flex", alignItems: "center", minWidth: 0, gap: 6 }}>
           <div style={{ width: 24, height: 24, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><ActivityIcon name={icon} tint={failed ? color.error : highlighted ? color.text : color.secondary} /></div>
           <Label secondary={!highlighted} size={14} style={{ lineHeight: 22.75, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden", minWidth: 0, flexShrink: 1 }}>{label}</Label>
@@ -67,6 +69,8 @@ export const ToolMessage = memo(function ToolMessage({ message }: { message: Mes
   const command = message.toolInput?.trim();
 
   const title = thinking ? expanded ? running ? "Thinking" : "Thought" : thoughtPreview(message.text)
+    : message.toolName === "update_plan" ? "Updated task plan"
+    : message.toolName === "ask_user" ? command?.split("\n")[0] || "Asked a question"
     : message.toolName === "bash" ? command?.split("\n")[0] || "Run command"
     : `${toolTitle(message.toolName ?? "Tool")}${command ? ` ${command.split("\n")[0]}` : ""}`;
 
@@ -75,7 +79,7 @@ export const ToolMessage = memo(function ToolMessage({ message }: { message: Mes
       {thinking ? <markdown source={message.text} theme={{ fontSans: font, fontMono: terminalFont, text: color.secondary, metrics: { mdTextSize: 14, mdLineHeight: 22.75 } }} style={{ width: "100%", minWidth: 0 }} /> : <>
         {command ? <div style={{ padding: 8, borderWidth: 1, borderColor: "#ffffff14", borderRadius: 6, minWidth: 0 }}><Label size={12} style={{ fontFamily: terminalFont, lineHeight: 18 }}>{command}</Label></div> : null}
         {message.text ? <Label size={12} style={{ fontFamily: terminalFont, lineHeight: 18, color: message.toolStatus === "error" ? color.error : color.secondary }}>{message.text}</Label> : null}
-        <Label size={12} style={{ color: running ? color.secondary : message.toolStatus === "error" ? color.error : "#79b88c" }}>{running ? "Running…" : message.toolStatus === "error" ? "Tool call failed" : "Completed"}</Label>
+        <Label size={12} style={{ color: running ? color.secondary : message.toolStatus === "error" ? color.error : "#79b88c" }}>{running ? "Running…" : message.toolStatus === "error" ? "Tool call failed" : message.toolName === "bash" ? "Process exited with code 0" : "Completed"}</Label>
       </>}
     </div> : null}
   </WorkRow>;

@@ -19,9 +19,11 @@ function motionEnvironment() {
 export function useActivityMotion(active: boolean) {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
-    if (!active) { setEnabled(false);
+    if (!active) {
+      setEnabled(false);
 
- return; }
+      return;
+    }
 
     let stopped = false;
 
@@ -66,7 +68,7 @@ export const ActivityShimmer = memo(function ActivityShimmer({ active, children 
   }, [enabled, renderer]);
   const stops = [[0, 0], [10.8, .12], [25.2, .55], [36, 1], [46.8, .55], [61.2, .12], [72, 0]];
 
-  return <div ref={ref} style={{ position: "relative", minWidth: 0, flexShrink: 1, overflow: "hidden" }}>
+  return <div ref={ref} style={{ position: "relative", minWidth: 0, maxWidth: "100%", display: "flex", flexDirection: "column", flexShrink: 1, overflow: "hidden" }}>
     {children(false)}
     {enabled && width > 0 ? Array.from({ length: 24 }, (_, index) => {
       const x = index * 3;
@@ -89,9 +91,12 @@ export const DisclosureArrow = memo(function DisclosureArrow({ expanded }: { exp
   useEffect(() => {
     const target = expanded ? 90 : 0;
 
-    if (!enabled) { angle.current = target; setShown(target);
+    if (!enabled) {
+      angle.current = target;
+      setShown(target);
 
- return; }
+      return;
+    }
 
     const start = performance.now();
     const from = angle.current;

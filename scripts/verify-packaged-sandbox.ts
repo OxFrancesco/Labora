@@ -34,12 +34,18 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) 
   const item = call ? { id, type: "function_call", call_id: id, name: call.name, arguments: JSON.stringify(call.arguments), status: "completed" }
     : { id, type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: "Package verified.", annotations: [] }] };
 
+  const thought = { id: `${id}-reasoning`, type: "reasoning", summary: [{ type: "summary_text", text: "Checking the workspace boundary." }] };
+
   const events = [
     { type: "response.created", response: { id } },
-    { type: "response.output_item.added", output_index: 0, item: { ...item, ...(call ? { arguments: "" } : { content: [] }) } },
-    ...(!call ? [{ type: "response.output_text.delta", output_index: 0, content_index: 0, delta: "Package verified." }] : []),
-    { type: "response.output_item.done", output_index: 0, item },
-    { type: "response.completed", response: { id, status: "completed", output: [item], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+    { type: "response.output_item.added", output_index: 0, item: { ...thought, summary: [] } },
+    { type: "response.reasoning_summary_text.delta", output_index: 0, summary_index: 0, delta: "Checking the workspace " },
+    { type: "response.reasoning_summary_text.delta", output_index: 0, summary_index: 0, delta: "boundary." },
+    { type: "response.output_item.done", output_index: 0, item: thought },
+    { type: "response.output_item.added", output_index: 1, item: { ...item, ...(call ? { arguments: "" } : { content: [] }) } },
+    ...(!call ? [{ type: "response.output_text.delta", output_index: 1, content_index: 0, delta: "Package verified." }] : []),
+    { type: "response.output_item.done", output_index: 1, item },
+    { type: "response.completed", response: { id, status: "completed", output: [thought, item], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
   ];
 
   return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""), { headers: { "Content-Type": "text/event-stream" } });
@@ -66,6 +72,10 @@ const completed = Promise.withResolvers<void>();
 
 const tools: EventPayload[] = [];
 
+const thoughts: EventPayload[] = [];
+
+const history = Promise.withResolvers<string>();
+
 const lines = createInterface({ input: (await import("node:stream")).Readable.from((async function* () {
   const reader = child.stdout.getReader();
 
@@ -82,8 +92,12 @@ const lines = createInterface({ input: (await import("node:stream")).Readable.fr
 lines.on("line", (line) => {
   const output = Schema.decodeUnknownSync(Schema.fromJsonString(ChildOutput))(line);
 
+  if (ChildOutput.isAnyOf(["Response"])(output) && output.id === "history") history.resolve(JSON.stringify(output.value));
+
   if (!ChildOutput.isAnyOf(["Event"])(output)) return;
   const event = output.payload;
+
+  if (EventPayload.isAnyOf(["Message"])(event) && event.message.role === "thinking") thoughts.push(event);
 
   if (EventPayload.isAnyOf(["Ready"])(event)) ready.resolve();
 
@@ -102,6 +116,10 @@ try {
   await Promise.race([ready.promise, completed.promise]);
   child.stdin.write(JSON.stringify(ChildRequest.make({ id: "prompt", command: ChildCommand.cases.Prompt.make({ runId: "sandbox", message: { text: "Verify sandbox tool execution." } }) })) + "\n");
   await completed.promise;
+  assert.ok(thoughts.some((event) => EventPayload.isAnyOf(["Message"])(event) && event.message.text === "Checking the workspace boundary." && event.message.toolStatus === "complete"));
+  child.stdin.write(JSON.stringify(ChildRequest.make({ id: "history", command: ChildCommand.cases.Messages.make({}) })) + "\n");
+  const saved = await Promise.race([history.promise, new Promise<never>((_, reject) => setTimeout(() => reject(Error("History did not return")), 10_000))]);
+  assert.ok(saved.includes('"role":"thinking"') && saved.includes("Checking the workspace boundary."));
   assert.ok(selections.length > 0);
   assert.ok(selections.every(selection => selection.model === "gpt-6-astra" && selection.reasoning.effort === "high"), "Every compiled worker request must use Astra with high reasoning by default");
   assert.equal(await Bun.file(join(root, "bots/fixture/workspace/note.txt")).text(), "PACKAGED_OK");

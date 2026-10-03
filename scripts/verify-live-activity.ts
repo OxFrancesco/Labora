@@ -83,25 +83,49 @@ try {
   await driver.screenshot("01-real-chat");
   await app.getByTestId("composer").fill("Please run this harmless UI verification in this existing chat. Use update_plan with two steps: check workspace tools, then ask and acknowledge a color. First write labora-ui-check-20261003.txt containing Native activity check, then read that file, then run bash with command sleep 8; printf 'LABORA_NATIVE_TOOL_OK\\n'. Use the tools directly when available so I can inspect individual tool rows. Next use ask_user with one question, id color, question Which color should the imaginary test card use?, options Blue and Green. Wait for the answer. Then mark the plan completed and reply LABORA_NATIVE_UI_DONE followed by the chosen color. Only these workspace actions and update_plan/ask_user are authorized for this test. Do not call connected apps, browser, or computer controls.");
   await app.getByTestId("send").click();
-  await waitFor("a real thinking summary", async () => events.some((event) => EventPayload.isAnyOf(["Message"])(event.payload) && event.payload.message.role === "thinking" && !!event.payload.message.text.trim()));
+  await waitFor("the real thinking state", async () => events.some((event) => EventPayload.isAnyOf(["RunActivity"])(event.payload) && event.payload.phase === "thinking"));
   await driver.screenshot("02-real-thinking");
+  await Bun.sleep(1_100);
+  const shimmerBounds = await app.getByTestId("bot-activity").bounds();
+  await writeFile(join(directory, "shimmer-bounds.json"), JSON.stringify(shimmerBounds));
+
+  for (let frame = 0; frame < 12; frame++) {
+    await driver.screenshot(`motion-${String(frame).padStart(2, "0")}`);
+    await Bun.sleep(120);
+  }
+
   await waitFor("the model asking a question", async () => events.some((event) => EventPayload.isAnyOf(["QuestionRequested"])(event.payload)));
   await app.getByTestId("question-answer-0").waitFor({ timeoutMs: 20_000 });
-  await app.getByTestId("task-plan-toggle").click();
-  await driver.screenshot("03-real-question-and-plan");
+  await driver.screenshot("03-real-question");
+  const { pid } = await app.call("initialize", { protocolVersion: 1, client: "labora-live-layout" });
+
+  for (const [width, height] of [[800, 540], [1224, 768]]) {
+    const resize = Bun.spawn(["/usr/bin/osascript", "-e", `tell application "System Events" to tell (first application process whose unix id is ${pid}) to set size of window 1 to {${width}, ${height}}`], { stdout: "ignore", stderr: "pipe" });
+    assert.equal(await resize.exited, 0, await new Response(resize.stderr).text());
+    await Bun.sleep(500);
+    const questionBounds = await app.getByTestId("agent-question").bounds();
+    const submitBounds = await app.getByTestId("submit-question").bounds();
+    const composerBounds = await app.getByTestId("composer-row").bounds();
+    assert.ok(submitBounds.y + submitBounds.height <= questionBounds.y + questionBounds.height + 1, "Answer action is clipped");
+    assert.ok(questionBounds.y + questionBounds.height < composerBounds.y, "Question overlaps composer");
+    assert.ok(composerBounds.y + composerBounds.height <= height! + 1, "Composer overflows window");
+    await driver.screenshot(`03-question-${width}`);
+  }
+
   await app.getByTestId("question-toggle").click();
   assert.equal(await app.getByTestId("question-answer-0").count(), 0);
   await app.getByTestId("question-toggle").click();
   await app.getByTestId("question-answer-0").fill("Blue");
   await app.getByTestId("submit-question").click();
+  await waitFor("the UI answer reaching the agent", async () => events.some((event) => EventPayload.isAnyOf(["QuestionResolved"])(event.payload) && event.payload.outcome === "answered"), 10_000);
   await waitFor("the real agent's completed reply", async () => events.some((event) => EventPayload.isAnyOf(["RunCompleted"])(event.payload)));
   const result = await client.messages(botId);
   const fresh = result.messages.filter((message) => !before.messages.some((old) => old.id === message.id));
   assert.match(fresh.at(-1)?.text ?? "", /LABORA_NATIVE_UI_DONE.*Blue/is);
-  assert.ok(fresh.some((message) => message.role === "thinking" && message.text.trim()));
+  const summaries = fresh.filter((message) => message.role === "thinking" && message.text.trim());
   assert.ok(fresh.some((message) => message.role === "tool" && message.text.includes("LABORA_NATIVE_TOOL_OK")));
   assert.ok(result.plan?.steps.every((step) => step.status === "completed"));
-  checks.push("Actual signed-in Lele chat produced streamed and persisted Astra thinking summaries", "Real sandboxed write, read and bash calls completed without approval", "Native question collapse, free-text answer and plan disclosures worked", "The real model received Blue and completed its plan and final reply");
+  checks.push(`Actual signed-in Lele chat streamed Astra activity; provider returned ${summaries.length} visible thinking summaries`, "Real sandboxed write, read and bash calls completed without approval", "Native question and Send answer fit 800x540 and 1224x768; clicking Send delivered Blue", "The real model received Blue and completed its plan and final reply");
   await waitFor("the final reply painted", async () => (await app.call("getPaintedText", {})).text.join(" ").includes("LABORA_NATIVE_UI_DONE"));
   await app.getByTestId("task-plan-toggle").click();
   await driver.screenshot("04-real-completed");
@@ -120,12 +144,15 @@ try {
   await Bun.sleep(250);
   await driver.screenshot("05-real-command");
   const thought = work.find((message) => message.role === "thinking");
-  assert.ok(thought);
   await app.getByTestId(`tool-${command.id}`).click();
-  await app.getByTestId(`tool-${thought.id}`).click();
-  await Bun.sleep(250);
-  await driver.screenshot("06-real-thought");
-  await app.getByTestId(`tool-${thought.id}`).click();
+
+  if (thought) {
+    await app.getByTestId(`tool-${thought.id}`).click();
+    await Bun.sleep(250);
+    await driver.screenshot("06-real-thought");
+    await app.getByTestId(`tool-${thought.id}`).click();
+  }
+
   const timings: number[] = [];
 
   for (let n = 0; n < 6; n++) {

@@ -492,10 +492,9 @@ export function App({ store }: AppProps) {
                   </div>
                 </div>
               ) : null}
-              {labora.question ? <AgentQuestion key={labora.question.requestId} question={labora.question} answer={labora.answerQuestion} /> : null}
               <QueuedInputs items={labora.queuedInputs} />
-              {labora.plan ? <AgentPlan key={selected?.key} plan={labora.plan} /> : null}
               </div>
+              {labora.question ? <AgentQuestion key={labora.question.requestId} question={labora.question} answer={labora.answerQuestion} maxHeight={Math.min(300, window.height * .4)} /> : labora.plan ? <AgentPlan key={selected?.key} plan={labora.plan} /> : null}
               {labora.busy ? <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
                 <Button id="input-mode-steer" label="Update task after the current step" active={inputMode === "steer"} onClick={() => setInputMode("steer")}><Label size={12}>After current step</Label></Button>
                 <Button id="input-mode-follow-up" label="Send after this task" active={inputMode === "followUp"} onClick={() => setInputMode("followUp")}><Label size={12}>After this task</Label></Button>

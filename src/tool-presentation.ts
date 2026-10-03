@@ -17,6 +17,17 @@ export function toolTitle(name: string): string {
 export function toolInput(name: string, input: Json | undefined): string {
   const data = record(input);
 
+  if (name === "update_plan" && Array.isArray(data.steps))
+    return data.steps.map((step) => {
+      const entry = record(step);
+      const status = textField(entry.status).replaceAll("_", " ");
+
+      return `${textField(entry.text)}${status ? ` · ${status}` : ""}`;
+    }).join("\n");
+
+  if (name === "ask_user" && Array.isArray(data.questions))
+    return data.questions.map((question) => textField(record(question).question)).filter(Boolean).join("\n");
+
   if (name === "bash") return textField(data.command);
 
   if (["read", "write", "edit"].includes(name)) return textField(data.path);

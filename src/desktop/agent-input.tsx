@@ -14,10 +14,11 @@ type PendingQuestion = Extract<EventPayload, { _tag: "QuestionRequested" }>;
 
 interface AgentQuestionProps {
   question: PendingQuestion;
+  maxHeight?: number;
   answer: (requestId: string, runId: string, answers: QuestionResponse["answers"]) => Promise<void>;
 }
 
-export function AgentQuestion({ question, answer }: AgentQuestionProps) {
+export function AgentQuestion({ question, answer, maxHeight = 300 }: AgentQuestionProps) {
   const [answers, setAnswers] = useState(new Map<string, string>());
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -72,7 +73,7 @@ export function AgentQuestion({ question, answer }: AgentQuestionProps) {
     advanceTimer.current = setTimeout(advance, 200);
   };
 
-  return <div testId="agent-question" style={{ display: "flex", flexDirection: "column", flexShrink: 0, minWidth: 0, maxHeight: 300, borderRadius: 12, backgroundColor: "#ffffff06", padding: 8 }}>
+  return <div testId="agent-question" style={{ display: "flex", flexDirection: "column", flexShrink: 0, minWidth: 0, maxHeight, borderRadius: 12, backgroundColor: "#ffffff06", padding: 8 }}>
     <div testId="question-toggle" role="button" aria-label={collapsed ? "Show question" : "Hide question"} aria-expanded={!collapsed} tabIndex={0} onClick={() => setCollapsed(!collapsed)} onKeyDown={(event) => { if (event.key === "enter" || event.key === "space") setCollapsed(!collapsed); }} style={{ display: "flex", alignItems: "center", minHeight: 24, gap: 8, cursor: "pointer" }}>
       <Label secondary size={12} style={{ flexGrow: 1, minWidth: 0, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{collapsed ? item.question : "Question"}</Label>
       {question.questions.length > 1 ? <Label secondary size={11}>{`${index + 1}/${question.questions.length}`}</Label> : null}
@@ -89,6 +90,8 @@ export function AgentQuestion({ question, answer }: AgentQuestionProps) {
       </div> : null}
       <textarea testId={`question-answer-${index}`} aria-label={item.question} value={answers.get(item.id) ?? ""} placeholder={item.options?.length ? "Or write your answer…" : "Your answer…"} minRows={1} maxRows={3} onChange={(event) => { if (!pending.current) { clearTimeout(advanceTimer.current); change(item.id, event.value ?? ""); } }} onSubmit={advance} style={{ padding: 8, borderRadius: 6, fontFamily: font, fontSize: 14, color: color.text, backgroundColor: "#ffffff06" }} />
       {error ? <Label size={12} style={{ color: color.error }}>{error}</Label> : null}
+    </div> : null}
+    {!collapsed ? <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0, paddingTop: 4 }}>
       <Button id="submit-question" label="Send answers" onClick={advance} style={{ alignSelf: "flex-end", paddingLeft: 10, paddingRight: 10 }}><Label size={12}>{submitting ? "Sending…" : index < question.questions.length - 1 ? "Next" : "Send answer"}</Label></Button>
     </div> : null}
   </div>;
