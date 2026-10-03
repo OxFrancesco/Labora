@@ -27,7 +27,7 @@ The packaged macOS app also supports `--computer --setup`, exposed by its Set up
 
 The [contracts](../src/computer/contracts.ts) define computer capabilities, displays, permissions and bounded actions. A capture returns PNG bytes and `X-Frame-Id` plus dimensions and coordinate-transform headers. Input identifies that frame and a unique request ID. Frames expire after 30 seconds, geometry changes require a new capture, and duplicate input requests are rejected. Human takeover blocks agent input and releases held buttons. Held buttons also release after five seconds without input, covering a disconnected client. `DELETE /v1/clients/self` revokes the caller. Revoking another client is a local host operation, never a model tool.
 
-Bot routes delegate to the isolated Pi host after authentication. The model's computer adapter forces `actor: "agent"`. These controls authenticate remote clients; they do not sandbox arbitrary host terminal commands against the operating-system user. Personal-machine agents must be trusted with that user's files and terminal authority.
+Bot routes delegate to the isolated Pi host after authentication. The model's computer adapter forces `actor: "agent"`. Workspace terminal and file tools use the OS sandbox without per-action approval. The Linux image includes bubblewrap, socat and ripgrep; the host must permit the namespaces required by the sandbox runtime. Commands fail closed if that boundary cannot initialize. This sandbox update has been verified on macOS, not on a deployed Cloudflare container. Connected Executor tools use their connected-account authority outside the filesystem sandbox; desktop input retains explicit approval.
 
 ## Cloudflare
 

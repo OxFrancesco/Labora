@@ -6,6 +6,7 @@ export const EnrollmentMetadata = Schema.Struct({
   name: Computer.fields.name,
   platform: Computer.fields.platform,
   endpoint: Schema.String,
+  approval: Schema.optionalKey(Schema.Literals(["browser", "code"])),
 });
 
 export interface EnrollmentMetadata extends Schema.Schema.Type<typeof EnrollmentMetadata> {}
@@ -13,6 +14,7 @@ export interface EnrollmentMetadata extends Schema.Schema.Type<typeof Enrollment
 export const EnrollmentStart = Schema.Struct({
   clientName: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(160)),
   challenge: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  code: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^\d{8}$/))),
 });
 
 export interface EnrollmentStart extends Schema.Schema.Type<typeof EnrollmentStart> {}

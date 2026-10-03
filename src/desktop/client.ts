@@ -186,6 +186,7 @@ export function computerClient(connection: Connection) {
       Schema.decodeUnknownSync(AuthStatus)(await (await request(`/v1/bots/${id}/auth`)).json()),
     startAuth: (id: string, provider: AuthStart["provider"]) =>
       request(`/v1/bots/${id}/auth/start`, { method: "POST", body: JSON.stringify({ provider }) }),
+    cancelAuth: (id: string) => request(`/v1/bots/${id}/auth/cancel`, { method: "POST" }),
     authInput: (id: string, value: string) =>
       request(`/v1/bots/${id}/auth/input`, { method: "POST", body: JSON.stringify({ value }) }),
     approve: (id: string, requestId: string, decision: ApprovalResponse["decision"]) =>

@@ -26,6 +26,8 @@ import {
   type SendMessage,
   UserQuestions,
 } from "./contracts";
+import { toolInput, toolOutput } from "../tool-presentation";
+import { createWorkspaceSandbox } from "./sandbox";
 import { createExecutor } from "./executor";
 import { createAgentInteractions } from "./interaction";
 import { createPlanTool } from "./plan";
@@ -84,6 +86,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       [agentDir, workspace, sessions].map((path) => mkdir(path, { recursive: true, mode: 0o700 })),
     ),
   );
+  const sandbox = yield* Effect.promise(() => createWorkspaceSandbox(workspace));
   const { modelRuntime, deviceId } = yield* Effect.promise(() => createLaboraModelRuntime(agentDir));
   const model = modelRuntime.getModel("openai", modelId);
 
@@ -94,6 +97,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   let cancelledRunId: string | undefined;
   let activeConversationId = "direct";
   let activeSession: AgentSession;
+  let executorReloadPending = false;
 
   const emit = (payload: EventPayload, conversationId = activeConversationId) => {
     output(isConversationEvent(payload)
@@ -228,7 +232,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
     if (!runner) throw new Error("The agent extension runtime did not initialize.");
     await session.bindExtensions({ mode: "rpc", uiContext: interactions.ui(runner.getUIContext()) });
-    session.setActiveToolsByName([...session.getActiveToolNames(), "grep", "find", "ls", "codemode"]);
+    session.setActiveToolsByName([...session.getActiveToolNames(), "codemode"]);
   };
 
   const tools: ToolDefinition[] = computerEnabled
@@ -332,7 +336,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       return { content: [{ type: "text", text: JSON.stringify(result) }], details: result };
     },
   });
-  tools.push(plans.tool);
+  tools.push(plans.tool, ...sandbox.tools);
 
   const settingsManager = SettingsManager.create(workspace, agentDir);
   settingsManager.setCacheWarmingMode("off");
@@ -347,7 +351,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     noThemes: true,
     noContextFiles: true,
     systemPrompt:
-      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover integrations through Executor. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Consequential tools wait for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
+      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover integrations through Executor. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Workspace bash, read, write and edit run automatically inside an OS sandbox. You may read and change your own workspace and access public websites. Host files, credentials, private networks and system changes are unavailable. Use bash for searching or listing workspace files. Never attempt to escape the sandbox. Connected Executor tools run without per-action permission prompts. They act through the connected account and are outside the local filesystem sandbox. Desktop input outside the sandbox waits for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
     extensionFactories: [
       createCodemodeExtension({ mode: "on", models: false }),
       createMcpExtension({
@@ -366,12 +370,17 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       }),
       (pi) => {
         pi.on("tool_call", async (event) => {
+          if (["grep", "find", "ls", "powershell"].includes(event.toolName))
+            return { block: true, reason: "Use the sandboxed bash tool for this operation." };
+
+          if (event.toolName.startsWith("mcp__executor__")) return;
+
           if (
             [
               "read",
-              "grep",
-              "find",
-              "ls",
+              "bash",
+              "write",
+              "edit",
               "codemode",
               "computer_info",
               "computer_capture",
@@ -423,6 +432,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       settingsManager,
       resourceLoader: loader,
       customTools: tools,
+      excludeTools: ["grep", "find", "ls", "powershell"],
       sessionManager: SessionManager.continueRecent(workspace, sessions),
     }),
   );
@@ -578,6 +588,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       settingsManager,
       resourceLoader: nextLoader,
       customTools: tools,
+      excludeTools: ["grep", "find", "ls", "powershell"],
       sessionManager: SessionManager.continueRecent(workspace, directory),
     });
 
@@ -610,12 +621,22 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     }
 
     approvals.clear();
-    auth?.controller.abort();
-    pendingInput?.reject(new Error("Sign-in cancelled"));
 
     for (const call of computerCalls.values()) call.reject(new Error("Run cancelled"));
     computerCalls.clear();
     await activeSession.abort();
+  };
+
+  const cancelAuth = () => {
+    auth?.controller.abort();
+    pendingInput?.reject(new Error("Sign-in cancelled"));
+  };
+
+  const refreshExecutor = async () => {
+    if (!executorReloadPending) return;
+    await activeSession.reload();
+    await bindExtensions(activeSession);
+    executorReloadPending = false;
   };
 
   let closed = false;
@@ -625,10 +646,12 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     closed = true;
 
     try {
+      cancelAuth();
       await cancel();
       await activeSession.extensionRunner?.emit({ type: "session_shutdown", reason: "quit" });
     } finally {
       activeSession.dispose();
+      await sandbox.close();
     }
   };
 
@@ -683,8 +706,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     try {
       if (provider === "executor") {
         await executor.login(controller.signal);
-        await activeSession.reload();
-        activeSession.setActiveToolsByName([...activeSession.getActiveToolNames(), "grep", "find", "ls", "codemode"]);
+        executorReloadPending = true;
       } else
         await modelRuntime.login(
           "openai",
@@ -739,7 +761,20 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       : SessionManager.continueRecent(workspace, sessionDirectory(conversationId))
           .buildSessionContext().messages;
 
+    const calls = new Map(history.flatMap((message) => message.role === "assistant" ? message.content.flatMap((part) => part.type === "toolCall" ? [[part.id, part] as const] : []) : []));
+
     const messages = history.flatMap((message) => {
+      if (message.role === "toolResult") {
+        const call = calls.get(message.toolCallId);
+
+        return [Message.make({
+          id: `tool-${message.toolCallId}`, role: "tool", toolName: message.toolName,
+          toolInput: call ? toolInput(message.toolName, json(JSON.stringify(call.arguments))) : "",
+          text: toolOutput(json(JSON.stringify({ content: message.content }))),
+          toolStatus: message.isError ? "error" : "complete", createdAt: new Date(message.timestamp).toISOString(),
+        })];
+      }
+
       if (message.role !== "user" && message.role !== "assistant") return [];
 
       const text = Array.isArray(message.content)
@@ -799,6 +834,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
               if (!modelRuntime.isUsingSubscription("openai"))
                 throw new Error("Sign in with your ChatGPT subscription before sending a message.");
+              await refreshExecutor();
               await switchConversation(command.conversationId ?? "direct");
               runId = command.runId;
               emit(EventPayload.cases.RunStarted.make({ runId }));
@@ -822,10 +858,15 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
               active: auth?.provider ?? null,
             }),
             AuthStart: async (command) => {
-              if (auth || runId) throw new Error("This bot is busy.");
+              if (auth || (runId && command.provider !== "executor")) throw new Error("This bot is busy.");
               void startAuth(command.provider);
 
               return { started: true };
+            },
+            AuthCancel: async () => {
+              cancelAuth();
+
+              return { cancelled: true };
             },
             AuthInput: async (command) => {
               if (!pendingInput) throw new Error("No sign-in input is pending.");

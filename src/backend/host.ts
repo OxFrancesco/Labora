@@ -691,7 +691,9 @@ export const layer = (options: HostOptions) =>
             ? "auth"
             : undefined;
 
-        if (activity && worker.activity.size > 0)
+        if (activity && (ChildCommand.isAnyOf(["AuthStart"])(command) && command.provider === "executor"
+          ? worker.activity.has("auth")
+          : worker.activity.size > 0))
           return yield* Effect.fail(new BackendError({
             code: "bot_busy",
             message: "This bot is busy in another run or sign-in.",

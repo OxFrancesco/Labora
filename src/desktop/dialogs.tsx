@@ -39,6 +39,8 @@ export function Sheet({ title, close, children }: SheetProps) {
         <div
           style={{
             width,
+            maxHeight: window.height - 48,
+            overflowY: "scroll",
             display: "flex",
             flexDirection: "column",
             gap: 18,
@@ -252,11 +254,25 @@ export function CreateBotDialog({ labora, close }: DialogProps) {
   );
 }
 
-export function ConnectionsDialog({ labora, close }: DialogProps) {
+export function ConnectionsDialog({ labora, close, signInRequired = false }: DialogProps & { signInRequired?: boolean }) {
   const [answer, setAnswer] = useState("");
   const target = labora.selected;
   const cancelAuth = labora.cancelAuth;
   const attempt = labora.attempt;
+  const openedLink = useRef("");
+
+  useEffect(() => {
+    if (signInRequired && labora.auth?.openai === "ready") close();
+  }, [signInRequired, labora.auth?.openai, close]);
+
+  useEffect(() => {
+    if (!labora.authLink || openedLink.current === labora.authLink) return;
+    openedLink.current = labora.authLink;
+    const child = Bun.spawn(["/usr/bin/open", labora.authLink], { stdout: "ignore", stderr: "ignore" });
+    attempt(child.exited.then((code) => {
+      if (code !== 0) throw new Error("Could not open your browser. Choose Open sign-in page to try again.");
+    }));
+  }, [labora.authLink, attempt]);
 
   useEffect(
     () => () => attempt(cancelAuth(target)),
@@ -264,25 +280,25 @@ export function ConnectionsDialog({ labora, close }: DialogProps) {
   );
 
   return (
-    <Sheet title="Connect apps" close={close}>
+    <Sheet title={signInRequired ? "Sign in with ChatGPT" : "Connect apps"} close={close}>
       <Button
         id="connection-openai"
         label="Sign in with ChatGPT"
-        onClick={() => labora.attempt(labora.signIn("openai"))}
+        onClick={() => { if (labora.auth?.active !== "openai") labora.attempt(labora.signIn("openai")); }}
         style={{ justifyContent: "space-between", padding: 12, backgroundColor: color.surface }}
       >
-        <Label>ChatGPT</Label>
-        <Label secondary>{labora.auth?.openai === "ready" ? "Connected" : "Sign in"}</Label>
+        <Label>{signInRequired ? "Continue with ChatGPT" : "ChatGPT"}</Label>
+        <Label secondary>{labora.auth?.active === "openai" ? "Signing in…" : labora.auth?.openai === "ready" ? "Connected" : signInRequired ? "" : "Sign in"}</Label>
       </Button>
-      <Button
+      {!signInRequired ? <Button
         id="connection-executor"
         label="Connect Executor"
-        onClick={() => labora.attempt(labora.signIn("executor"))}
+        onClick={() => { if (labora.auth?.active !== "executor") labora.attempt(labora.signIn("executor")); }}
         style={{ justifyContent: "space-between", padding: 12, backgroundColor: color.surface }}
       >
         <Label>Executor</Label>
-        <Label secondary>{labora.auth?.executor === "ready" ? "Connected" : "Connect"}</Label>
-      </Button>
+        <Label secondary>{labora.auth?.active === "executor" ? "Connecting…" : labora.auth?.executor === "ready" ? "Connected" : "Connect"}</Label>
+      </Button> : null}
       {labora.authLink ? (
         <Button
           id="open-auth-link"

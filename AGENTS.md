@@ -13,5 +13,6 @@ folder to gather information, feedback, patterns, and templates before writing c
 - `resources/cloudflare-sandbox` — Cloudflare Sandbox SDK official source and examples
 - `resources/gltf-blender-io` — Official Blender glTF exporter source for portable character meshes
 - `resources/tailscale` — Official Tailscale client source for browser sign-in, status discovery, Serve identity, and local API enrollment
+- `resources/sandbox-runtime` — Official OS sandbox runtime and platform policies for automatic agent tools
 
 <!-- codeview:end -->

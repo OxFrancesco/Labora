@@ -93,6 +93,9 @@ export function Button({ label, id, icon, children, onClick, active = false, sty
         alignItems: "center",
         justifyContent: "center",
         minHeight: 30,
+        minWidth: 0,
+        maxWidth: "100%",
+        flexShrink: 0,
         padding: 6,
         borderRadius: 8,
         cursor: "pointer",
@@ -121,6 +124,8 @@ export function Label({ children, secondary = false, size = 14, style }: LabelPr
         color: secondary ? color.secondary : color.text,
         fontFamily: font,
         fontSize: size,
+        minWidth: 0,
+        maxWidth: "100%",
         lineHeight: size * 1.5,
         ...style,
       }}

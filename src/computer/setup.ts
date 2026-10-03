@@ -1,3 +1,4 @@
+import { webIcon } from "../web-icon";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,7 +8,7 @@ import type { createComputerHost } from "./host";
 
 const SetupInstance = Schema.Struct({ pid: Schema.Number, instanceId: Schema.String, url: Schema.String });
 
-const Enrollment = Schema.Struct({ publicUrl: Schema.String, ownerLogin: Schema.String });
+const Enrollment = Schema.Struct({ publicUrl: Schema.String, ownerLogin: Schema.optionalKey(Schema.String), pairingOnly: Schema.optionalKey(Schema.Boolean), nodeId: Schema.optionalKey(Schema.String) });
 
 interface SetupInstance extends Schema.Schema.Type<typeof SetupInstance> {}
 
@@ -17,6 +18,7 @@ interface SetupSnapshot {
   enabled: boolean;
   authUrl?: string;
   error?: string;
+  pairingCode?: { code: string; expiresAt: number };
 }
 
 interface ActiveEnrollment extends Schema.Schema.Type<typeof Enrollment> { nodeId: string }
@@ -24,7 +26,7 @@ interface ActiveEnrollment extends Schema.Schema.Type<typeof Enrollment> { nodeI
 interface SetupFailure { error: string }
 
 interface SetupOptions {
-  host: Pick<Awaited<ReturnType<typeof createComputerHost>>, "enableEnrollment" | "disableEnrollment">;
+  host: Pick<Awaited<ReturnType<typeof createComputerHost>>, "enableEnrollment" | "disableEnrollment" | "issuePairingCode">;
   dataDir: string;
   localOrigin: string;
   port: number;
@@ -79,13 +81,13 @@ const headers = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
-  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  "Content-Security-Policy": "default-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
 };
 
 function setupPage() {
-  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up this computer · Labora</title><style>
-:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eee;background:#0a0a0a}*{box-sizing:border-box}body{margin:0;padding:28px}main{max-width:440px;margin:15vh auto}h1{font-size:28px;line-height:1.2;letter-spacing:-.7px;margin:0 0 18px;font-weight:600}p{font-size:15px;line-height:1.6;color:#aaa;margin:0 0 24px}#actions{display:flex;gap:10px;flex-wrap:wrap}button,a{font:inherit;font-size:15px;text-decoration:none;border:1px solid #444;border-radius:8px;background:#1a1a1a;color:#eee;padding:12px 18px;cursor:pointer}button.primary{background:#eee;color:#111;border-color:#eee}button:disabled{opacity:.45;cursor:default}button:focus-visible,a:focus-visible{outline:3px solid #888;outline-offset:3px}#error{color:#ffb0a9;margin-top:20px}#account{overflow-wrap:anywhere}#refresh{margin-top:24px;background:transparent;padding:8px 0;border:0;color:#aaa}a[hidden],button[hidden],p[hidden]{display:none}@media(max-width:480px){main{margin-top:10vh}}
-</style><main><h1>Set up this computer</h1><p id="description">Checking Tailscale…</p><p id="account" hidden></p><div id="actions"><a id="install" href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer" hidden>Install Tailscale</a><button id="login" class="primary" hidden>Sign in to Tailscale</button><a id="consent" target="_blank" rel="noopener noreferrer" hidden>Continue in Tailscale</a><button id="enable" class="primary" hidden>Enable access</button><button id="cancel" hidden>Cancel sign-in</button></div><p id="error" role="alert" hidden></p><button id="refresh">Check again</button></main><script>
+  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up this computer · Labora</title>${webIcon}<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eee;background:#0a0a0a}*{box-sizing:border-box}body{margin:0;padding:28px}main{max-width:440px;margin:15vh auto}h1{font-size:28px;line-height:1.2;letter-spacing:-.7px;margin:0 0 18px;font-weight:600}p{font-size:15px;line-height:1.6;color:#aaa;margin:0 0 24px}#actions{display:flex;gap:10px;flex-wrap:wrap}button,a{font:inherit;font-size:15px;text-decoration:none;border:1px solid #444;border-radius:8px;background:#1a1a1a;color:#eee;padding:12px 18px;cursor:pointer}button.primary{background:#eee;color:#111;border-color:#eee}button:disabled{opacity:.45;cursor:default}button:focus-visible,a:focus-visible{outline:3px solid #888;outline-offset:3px}#error{color:#ffb0a9;margin-top:20px}#account{overflow-wrap:anywhere}#pairing-code{margin-top:24px;color:#eee;font-variant-numeric:tabular-nums;white-space:pre-line;overflow-wrap:anywhere}#refresh{margin-top:24px;background:transparent;padding:8px 0;border:0;color:#aaa}a[hidden],button[hidden],p[hidden]{display:none}@media(max-width:480px){main{margin-top:10vh}}
+</style><main><h1>Set up this computer</h1><p id="description">Checking Tailscale…</p><p id="account" hidden></p><div id="actions"><a id="install" href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer" hidden>Install Tailscale</a><button id="login" class="primary" hidden>Sign in to Tailscale</button><a id="consent" target="_blank" rel="noopener noreferrer" hidden>Continue in Tailscale</a><button id="enable" class="primary" hidden>Enable access</button><button id="pair-code" hidden>Create pairing code</button><button id="cancel" hidden>Cancel sign-in</button></div><p id="pairing-code" hidden></p><p id="error" role="alert" hidden></p><button id="refresh">Check again</button></main><script>
 const base=location.pathname.endsWith('/')?location.pathname.slice(0,-1):location.pathname;
 const element=id=>document.getElementById(id);
 let busy=false;
@@ -94,17 +96,18 @@ function show(id,visible){element(id).hidden=!visible;}
 function error(message){element('error').textContent=message;show('error',!!message);}
 function render(state){
  const ts=state.tailscale;
- const usable=ts.running&&ts.self&&!ts.self.tagged&&ts.self.ownerLogin;
- element('description').textContent=state.enabled?'This computer is ready. Open Labora on your other computer and choose Connect with Tailscale.':!ts.installed?'Install Tailscale, sign in with the same account you use on your other computer, then check again.':!ts.running?'Sign in to Tailscale to connect your computers.':!usable?'Use a personal Tailscale account on this computer. Tagged devices cannot approve a personal connection.':'Allow your Labora clients to request access through Tailscale. You will approve each new client in your browser.';
+ const usable=ts.running&&ts.self&&(ts.self.tagged||ts.self.ownerLogin);
+ element('description').textContent=state.enabled?'This computer is ready. Choose it in Labora. If asked for a pairing code, create one here and enter it in Labora. Only share a code with a client you want to give computer access.':!ts.installed?'Install Tailscale, sign in with the same account you use on your other computer, then check again.':!ts.running?'Sign in to Tailscale to connect your computers.':!usable?'Tailscale has not reported a usable device identity. Open Tailscale and check this device.':ts.self?.tagged?'Allow Labora to connect through Tailscale. Each new client needs a pairing code from this page.':'Allow your Labora clients to request access through Tailscale. Approve each client in your browser or with a pairing code.';
  element('account').textContent=ts.self?ts.self.name+(ts.self.ownerLogin?' · '+ts.self.ownerLogin:''):'';
+ show('pair-code',state.enabled);show('pairing-code',!!state.pairingCode&&state.enabled);element('pairing-code').textContent=state.pairingCode?'Pairing code: '+state.pairingCode.code+'\\nExpires at '+new Date(state.pairingCode.expiresAt).toLocaleTimeString()+'. One use, five attempts.':'';
  show('account',!!ts.self);show('install',!ts.installed);show('login',ts.installed&&!ts.running&&!state.loggingIn);show('cancel',state.loggingIn);show('enable',!!usable&&!state.enabled);show('consent',!!state.authUrl&&!state.enabled);
  if(state.authUrl)element('consent').href=state.authUrl;
- for(const id of ['enable','login','refresh'])element(id).disabled=busy;
+ for(const id of ['enable','login','refresh','pair-code'])element(id).disabled=busy;
  error(state.error||'');
 }
 async function refresh(){if(polling)return;polling=true;try{const response=await fetch(base+'/status',{cache:'no-store'});const state=await response.json();if(!response.ok)throw new Error(state.error||'Could not check this computer.');render(state);}catch(cause){error(cause.message||'Could not check this computer.');}finally{polling=false;}}
-async function action(name){if(busy)return;busy=true;for(const id of ['enable','login','refresh'])element(id).disabled=true;try{const response=await fetch(base+'/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const state=await response.json();if(!response.ok)throw new Error(state.error||'Setup did not finish.');render(state);}catch(cause){error(cause.message||'Setup did not finish.');}finally{busy=false;await refresh();}}
-element('login').onclick=()=>action('login');element('enable').onclick=()=>action('enable');element('cancel').onclick=()=>action('cancel');element('refresh').onclick=refresh;
+async function action(name){if(busy)return;busy=true;for(const id of ['enable','login','refresh','pair-code'])element(id).disabled=true;try{const response=await fetch(base+'/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const state=await response.json();if(!response.ok)throw new Error(state.error||'Setup did not finish.');render(state);}catch(cause){error(cause.message||'Setup did not finish.');}finally{busy=false;await refresh();}}
+element('pair-code').onclick=()=>action('pair-code');element('login').onclick=()=>action('login');element('enable').onclick=()=>action('enable');element('cancel').onclick=()=>action('cancel');element('refresh').onclick=refresh;
 refresh();const timer=setInterval(()=>{if(!busy)refresh();},3000);addEventListener('pagehide',()=>clearInterval(timer));
 </script></html>`;
 }
@@ -127,6 +130,7 @@ export async function startComputerSetup(options: SetupOptions) {
   let activeEnrollment: ActiveEnrollment | undefined;
   let authUrl: string | undefined;
   let message: string | undefined;
+  let pairingCode: { code: string; expiresAt: number } | undefined;
 
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
   await chmod(options.dataDir, 0o700);
@@ -135,7 +139,7 @@ export async function startComputerSetup(options: SetupOptions) {
     const stored = Schema.decodeUnknownSync(Schema.fromJsonString(Enrollment))(await privateRead(enrollmentPath));
     const live = await adapter.serveStatus(options.port, controller.signal);
 
-    if (live.configured && live.endpoint === stored.publicUrl && live.self.ownerLogin === stored.ownerLogin && !live.self.tagged) {
+    if (live.configured && live.endpoint === stored.publicUrl && live.self.ownerLogin === stored.ownerLogin && live.self.tagged === Boolean(stored.pairingOnly) && (!stored.pairingOnly || live.self.id === stored.nodeId)) {
       await options.host.enableEnrollment({ ...stored, listenerHost });
       activeEnrollment = { ...stored, nodeId: live.self.id };
       enabled = true;
@@ -151,15 +155,16 @@ export async function startComputerSetup(options: SetupOptions) {
     if (enabled && activeEnrollment && !enabling) {
       const live = await adapter.serveStatus(options.port, controller.signal).catch(() => undefined);
 
-      if (!live?.configured || live.endpoint !== activeEnrollment.publicUrl || live.self.id !== activeEnrollment.nodeId || live.self.ownerLogin !== activeEnrollment.ownerLogin || live.self.tagged) {
+      if (!live?.configured || live.endpoint !== activeEnrollment.publicUrl || live.self.id !== activeEnrollment.nodeId || live.self.ownerLogin !== activeEnrollment.ownerLogin || live.self.tagged !== Boolean(activeEnrollment.pairingOnly)) {
         enabled = false;
+        pairingCode = undefined;
         activeEnrollment = undefined;
         options.host.disableEnrollment();
         message = "Computer access changed. Check Tailscale, then enable access again.";
       }
     }
 
-    return { tailscale: { installed: current.installed, running: current.running, self: current.self }, loggingIn: Boolean(login), enabled, authUrl, error: message ?? current.unavailableReason };
+    return { tailscale: { installed: current.installed, running: current.running, self: current.self }, loggingIn: Boolean(login), enabled, authUrl, error: message ?? current.unavailableReason, pairingCode: pairingCode && pairingCode.expiresAt > Date.now() ? pairingCode : undefined };
   };
 
   const json = (value: SetupInstance | SetupSnapshot | SetupFailure, status = 200) => Response.json(value, { status, headers });
@@ -173,16 +178,18 @@ export async function startComputerSetup(options: SetupOptions) {
     try {
       const before = await adapter.status(controller.signal);
 
-      if (!before.self?.ownerLogin || before.self.tagged)
+      if (!before.running || !before.self || (!before.self.ownerLogin && !before.self.tagged))
         throw new TailscaleError({ code: "owner_required", message: "Sign in to Tailscale with your personal account first." });
 
       const result = await adapter.ensureServe(options.port, (url) => { authUrl = url; }, controller.signal);
       const after = await adapter.serveStatus(options.port, controller.signal);
 
-      if (!after.configured || after.endpoint !== result.endpoint || after.self.id !== before.self.id || after.self.ownerLogin !== before.self.ownerLogin)
+      if (!after.configured || after.endpoint !== result.endpoint || after.self.id !== before.self.id || after.self.ownerLogin !== before.self.ownerLogin || after.self.tagged !== before.self.tagged)
         throw new TailscaleError({ code: "identity_changed", message: "The Tailscale account changed. Check the account and try again." });
 
-      const configuration = { publicUrl: result.endpoint, ownerLogin: before.self.ownerLogin };
+      const configuration = { publicUrl: result.endpoint, pairingOnly: before.self.tagged, nodeId: before.self.id };
+
+      if (before.self.ownerLogin) Object.assign(configuration, { ownerLogin: before.self.ownerLogin });
       await privateWrite(enrollmentPath, configuration);
       await options.host.enableEnrollment({ ...configuration, listenerHost });
       activeEnrollment = { ...configuration, nodeId: after.self.id };
@@ -231,6 +238,13 @@ export async function startComputerSetup(options: SetupOptions) {
         login?.cancel();
         authUrl = undefined;
       } else if (action === "enable") await enable();
+      else if (action === "pair-code") {
+        await snapshot();
+
+        if (!enabled) throw new TailscaleError({ code: "sharing_required", message: "Enable access before creating a pairing code." });
+        const issued = await options.host.issuePairingCode();
+        pairingCode = { code: issued.code, expiresAt: issued.expiresAt };
+      }
       else return json({ error: "Unknown setup operation." }, 404);
 
       return json(await snapshot());

@@ -2,7 +2,7 @@ FROM oven/bun:1.4.2-debian
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb xauth x11-utils xdotool scrot openbox xterm pcmanfm chromium \
-    dbus-x11 fonts-dejavu fonts-liberation ca-certificates curl git ripgrep tini \
+    dbus-x11 fonts-dejavu fonts-liberation ca-certificates curl git ripgrep bubblewrap socat tini \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 WORKDIR /opt/labora

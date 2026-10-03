@@ -15,7 +15,6 @@ export const CreateBot = Schema.Struct({
   id: BotId,
   name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(120)),
   color: Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i)),
-  label: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(120))),
 });
 
 export interface CreateBot extends Schema.Schema.Type<typeof CreateBot> {}
@@ -23,7 +22,6 @@ export interface CreateBot extends Schema.Schema.Type<typeof CreateBot> {}
 export const UpdateBot = Schema.Struct({
   name: Schema.optionalKey(CreateBot.fields.name),
   color: Schema.optionalKey(CreateBot.fields.color),
-  label: CreateBot.fields.label,
 });
 
 export interface UpdateBot extends Schema.Schema.Type<typeof UpdateBot> {}
@@ -68,6 +66,8 @@ export const Message = Schema.Struct({
   text: Schema.String,
   createdAt: Schema.String,
   toolName: Schema.optionalKey(Schema.String),
+  toolInput: Schema.optionalKey(Schema.String),
+  toolStatus: Schema.optionalKey(Schema.Literals(["running", "complete", "error"])),
 });
 
 export interface Message extends Schema.Schema.Type<typeof Message> {}
@@ -254,6 +254,7 @@ export const ChildCommand = Schema.TaggedUnion({
   },
   AuthStatus: {},
   AuthStart: { provider: Provider },
+  AuthCancel: {},
   AuthInput: { value: Schema.String },
   Approval: { requestId: Schema.String, decision: ApprovalResponse.fields.decision },
   QuestionResponse: { ...QuestionResponse.fields, requestId: Schema.String, conversationId: Schema.optionalKey(ConversationId) },

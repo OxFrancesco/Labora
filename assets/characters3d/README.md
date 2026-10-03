@@ -29,3 +29,5 @@ blender --background --factory-startup --python scripts/blender-characters.py --
 Use `--only star` to rebuild one character, `--contact-sheet` to refresh the collection render and manifest, or `--turnaround` to regenerate the three-view proof. On this Mac, Blender's Metal initialization requires execution outside the restricted filesystem sandbox.
 
 The official exporter reference was obtained with `codeview` at `resources/gltf-blender-io`. The running exporter comes from Blender's bundled `io_scene_gltf2` version 5.2.39. All geometry and material recipes are in `scripts/blender-characters.py`.
+
+The native app also bundles a 160 x 160 RGBA preview per character. `bun scripts/build-character-previews.ts` renders these from the USDZ models with the same SceneKit lighting and neutral pose used by the app. The picker and the first visible avatar frame use these local previews immediately; the large avatar then renders its interactive 3D animation. Desktop builds regenerate and validate the previews.

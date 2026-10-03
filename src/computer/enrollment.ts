@@ -1,3 +1,4 @@
+import { webIcon } from "../web-icon";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Effect, Schema, Semaphore } from "effect";
 import type { ComputerAuthority } from "./authority";
@@ -8,7 +9,8 @@ import {
 
 export interface EnrollmentOptions {
   readonly publicUrl: string;
-  readonly ownerLogin: string;
+  readonly ownerLogin?: string;
+  readonly pairingOnly?: boolean;
   readonly listenerHost: "127.0.0.1" | "::1";
 }
 
@@ -20,6 +22,7 @@ interface Intent {
   status: "pending" | "approved" | "denied" | "claimed" | "connected" | "cancelled";
   clientId?: string;
   csrfDigest: string;
+  codeApproved?: boolean;
 }
 
 interface Dependencies {
@@ -47,7 +50,7 @@ const headers = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
-  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  "Content-Security-Policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 };
 
 const json = (value: Schema.Schema.Type<typeof Schema.Json>, status = 200) =>
@@ -58,7 +61,7 @@ const page = (title: string, content: string, cookie?: string) => {
 
   if (cookie) responseHeaders.set("Set-Cookie", cookie);
 
-  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · Labora</title><style>
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · Labora</title>${webIcon}<style>
   :root{color-scheme:light dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#222;background:#fafafa}*{box-sizing:border-box}body{margin:0;padding:28px}main{max-width:420px;margin:18vh auto}h1{font-size:27px;line-height:1.2;letter-spacing:-.8px;margin:0 0 20px;font-weight:650}p{font-size:15px;line-height:1.6;margin:0 0 22px;color:#555}strong{color:#222;font-weight:600}form{display:flex;gap:10px;margin-top:30px}button{font:inherit;font-size:15px;font-weight:550;border:1px solid #ddd;border-radius:8px;background:#fff;color:#222;padding:12px 18px;cursor:pointer}button[value=approve]{background:#222;border-color:#222;color:#fff;flex:1}button:focus-visible{outline:3px solid #777;outline-offset:3px}@media(prefers-color-scheme:dark){:root{color:#eee;background:#151515}p{color:#aaa}strong{color:#eee}button{background:#222;color:#eee;border-color:#444}button[value=approve]{background:#eee;color:#151515;border-color:#eee}}@media(max-width:480px){main{margin-top:12vh}}
   </style><main><h1>${escape(title)}</h1>${content}</main></html>`, { headers: responseHeaders });
 };
@@ -105,7 +108,7 @@ export const createEnrollmentHandler = Effect.fn("Enrollment.create")(function* 
   });
 
   if (publicUrl.protocol !== "https:" || publicUrl.username || publicUrl.password || publicUrl.search || publicUrl.hash ||
-    !/^(?:\/[A-Za-z0-9_-]+)*\/?$/.test(publicUrl.pathname) || !options.ownerLogin.trim())
+    !/^(?:\/[A-Za-z0-9_-]+)*\/?$/.test(publicUrl.pathname) || (!options.ownerLogin?.trim() && !options.pairingOnly))
     return yield* Effect.fail(error(400, "enrollment_url", "Use the HTTPS address and signed-in owner reported by Tailscale."));
   const endpoint = publicUrl.href.replace(/\/$/, "");
   const intents = new Map<string, Intent>();
@@ -147,9 +150,12 @@ export const createEnrollmentHandler = Effect.fn("Enrollment.create")(function* 
       return yield* Effect.fail(error(403, "origin_rejected", "Cross-origin connection requests are not accepted."));
 
     if (url.pathname === "/.well-known/labora" && request.method === "GET")
-      return json({ ...dependencies.metadata, endpoint });
+      return json({ ...dependencies.metadata, endpoint, approval: options.pairingOnly ? "code" : "browser" });
 
-    if (!equal(request.headers.get("Tailscale-User-Login") ?? "", options.ownerLogin))
+    const isOwner = !options.pairingOnly && Boolean(options.ownerLogin) && equal(request.headers.get("Tailscale-User-Login") ?? "", options.ownerLogin ?? "");
+    const verifierIntent = intents.get(claimMatch?.[1] ?? ackMatch?.[1] ?? cancelMatch?.[1] ?? "");
+
+    if (!isOwner && url.pathname !== "/v1/enrollment" && !verifierIntent?.codeApproved)
       return yield* Effect.fail(error(403, "enrollment_owner", "Sign in to the Tailscale account that owns this computer."));
 
     if (url.pathname === "/v1/enrollment" && request.method === "POST") {
@@ -159,14 +165,19 @@ export const createEnrollmentHandler = Effect.fn("Enrollment.create")(function* 
 
       if (!input.clientName.trim()) return yield* Effect.fail(error(400, "invalid_enrollment", "A client name is required."));
 
+      if (!isOwner && !input.code)
+        return yield* Effect.fail(error(403, "pairing_required", "Enter a pairing code created in Labora Computer on this computer."));
+
       return yield* mutex.withPermit(Effect.gen(function* () {
         for (const [id, intent] of intents) if (intent.expiresAt <= Date.now()) intents.delete(id);
 
         if (intents.size >= 10)
           return yield* Effect.fail(error(429, "enrollment_limit", "Too many connection requests. Wait a few minutes and try again."));
+
+        if (input.code) yield* dependencies.authority.consumePairingCode(input.code);
         const id = crypto.randomUUID();
         const expiresAt = Date.now() + 300_000;
-        intents.set(id, { id, expiresAt, clientName: input.clientName.trim(), challenge: input.challenge, status: "pending", csrfDigest: "" });
+        intents.set(id, { id, expiresAt, clientName: input.clientName.trim(), challenge: input.challenge, status: input.code ? "approved" : "pending", codeApproved: Boolean(input.code), csrfDigest: "" });
 
         return json({ id, expiresAt, approvalUrl: `${endpoint}/connect/${id}` }, 201);
       }));

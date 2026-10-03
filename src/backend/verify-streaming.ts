@@ -226,7 +226,7 @@ try {
 
   const generation = await nextGeneration("Return the controlled streaming fixture.");
 
-  for (const name of ["read", "bash", "edit", "write", "grep", "find", "ls", "codemode", "ask_user", "update_plan"])
+  for (const name of ["read", "bash", "edit", "write", "codemode", "ask_user", "update_plan"])
     assert.ok(generation.tools.includes(`"name":"${name}"`), `Missing declared tool: ${name}; declarations: ${generation.tools.match(/"name":"[^"]+"/g)?.join(", ")}`);
   checks.push("The actual provider request declares file, terminal, search, code mode, ask_user and update_plan tools");
   generation.text("First 🟡");
@@ -288,31 +288,24 @@ try {
   const toolCall = await nextGeneration("Request the isolated write tool for verification.");
   const afterTool = awaitingGeneration.promise;
   toolCall.tool("write", { path: "approved-fixture.txt", content: "Controlled fixture only" });
-  await waitFor(() => activity.phase === "waiting");
-  const approvalEvent = events.slice().reverse().find((event) => EventPayload.isAnyOf(["ApprovalRequested"])(event.payload));
-  assert.ok(approvalEvent && EventPayload.isAnyOf(["ApprovalRequested"])(approvalEvent.payload));
-  const approval = approvalEvent.payload;
-  const waiting = await client.messages("one");
-  assert.equal(waiting.activity?.phase, "waiting");
-  assert.equal(await Bun.file(join(dataDir, "bots", "one", "workspace", "approved-fixture.txt")).exists(), false);
-  await client.approve("one", approval.requestId, "approve");
+  assert.ok(!(await client.messages("one")).pending.some(EventPayload.isAnyOf(["ApprovalRequested"])));
   const toolReply = await afterTool;
   toolReply.text("The approved fixture is saved.");
   toolReply.finish();
   await waitFor(() => activity.phase === "complete");
   assert.equal(await Bun.file(join(dataDir, "bots", "one", "workspace", "approved-fixture.txt")).text(), "Controlled fixture only");
   assert.ok(trace.some((item) => item.phase === "working"));
-  checks.push("Approval pauses a real filesystem tool, restores waiting state, and resumes after explicit consent");
+  checks.push("Workspace write runs automatically inside the sandbox");
 
-  const deniedTool = await nextGeneration("Request an isolated write that the human will decline.");
-  deniedTool.tool("write", { path: "denied-fixture.txt", content: "Must not be written" });
-  await waitFor(() => activity.phase === "waiting");
-  const deniedEvent = events.slice().reverse().find((event) => EventPayload.isAnyOf(["ApprovalRequested"])(event.payload));
-  assert.ok(deniedEvent && EventPayload.isAnyOf(["ApprovalRequested"])(deniedEvent.payload));
-  await client.approve("one", deniedEvent.payload.requestId, "deny");
-  await waitFor(() => activity.phase === "cancelled");
-  assert.equal(await Bun.file(join(dataDir, "bots", "one", "workspace", "denied-fixture.txt")).exists(), false);
-  checks.push("Declining a real tool leaves the filesystem untouched and reports cancelled, not complete");
+  const deniedTool = await nextGeneration("Request a write outside the workspace.");
+  const deniedReply = awaitingGeneration.promise;
+  deniedTool.tool("write", { path: join(dataDir, "denied-fixture.txt"), content: "Must not be written" });
+  const deniedResult = await deniedReply;
+  assert.ok(deniedResult.input.includes("outside the agent workspace"));
+  deniedResult.text("The sandbox blocked the write."); deniedResult.finish();
+  await waitFor(() => activity.phase === "complete");
+  assert.equal(await Bun.file(join(dataDir, "denied-fixture.txt")).exists(), false);
+  checks.push("The real write tool cannot write outside the workspace");
 
   const isolatedRoutine = await client.createRoutine({
     botId: "one", name: "Question isolation", prompt: "Ask for the routine value.",
@@ -427,16 +420,12 @@ try {
   const progress = await nextGeneration("Run a command that reports progress.");
   const progressReply = awaitingGeneration.promise;
   progress.tool("bash", { command: "printf 'LABORA_PROGRESS_MARKER'" });
-  await waitFor(() => activity.phase === "waiting");
-  const progressApproval = (await client.messages("one")).pending.find(EventPayload.isAnyOf(["ApprovalRequested"]));
-  assert.ok(progressApproval);
-  await client.approve("one", progressApproval.requestId, "approve");
   const progressResult = await progressReply;
   await waitFor(() => events.some((event) => EventPayload.isAnyOf(["ToolProgress"])(event.payload) && event.payload.text.includes("LABORA_PROGRESS_MARKER")));
   assert.ok(progressResult.input.includes("LABORA_PROGRESS_MARKER"));
   progressResult.text("Command output received."); progressResult.finish();
   await waitFor(() => activity.phase === "complete");
-  checks.push("Approved real terminal output emits bounded progress and reaches the next Pi request");
+  checks.push("Automatic sandboxed terminal output emits bounded progress and reaches the next Pi request");
 
   const searchDirectory = join(workspace, "search-fixture");
   await mkdir(searchDirectory);
@@ -446,9 +435,9 @@ try {
   let search = await nextGeneration("Inspect the isolated search fixture with the read-only tools.");
 
   const searches: { name: string; input: Schema.Schema.Type<typeof Schema.Json>; expected: string }[] = [
-    { name: "grep", input: { path: "search-fixture", pattern: "LABORA_SEARCH_CONTENT_MARKER" }, expected: "needle.txt:1: LABORA_SEARCH_CONTENT_MARKER" },
-    { name: "find", input: { path: "search-fixture", pattern: "*.txt" }, expected: "needle.txt" },
-    { name: "ls", input: { path: "search-fixture" }, expected: "needle.txt" },
+    { name: "bash", input: { command: "grep -Hn LABORA_SEARCH_CONTENT_MARKER search-fixture/*" }, expected: "needle.txt:1:LABORA_SEARCH_CONTENT_MARKER" },
+    { name: "bash", input: { command: "find search-fixture -name '*.txt'" }, expected: "needle.txt" },
+    { name: "bash", input: { command: "ls search-fixture" }, expected: "needle.txt" },
   ];
 
   for (const check of searches) {
@@ -459,11 +448,11 @@ try {
     assert.ok(!(await client.messages("one")).pending.some(EventPayload.isAnyOf(["ApprovalRequested"])));
   }
 
-  assert.equal(await Bun.file(join(agentDir, "bin", "rg")).exists(), true);
-  assert.equal(await Bun.file(join(agentDir, "bin", "fd")).exists(), true);
+  assert.equal(await Bun.file(join(agentDir, "bin", "rg")).exists(), false);
+  assert.equal(await Bun.file(join(agentDir, "bin", "fd")).exists(), false);
   search.text("File listing and content search succeeded."); search.finish();
   await waitFor(() => activity.phase === "complete");
-  checks.push("Real grep, find and ls return fixture files with the packaged minimal PATH; fresh per-bot rg/fd bootstrap succeeds");
+  checks.push("Sandboxed shell search and listing return fixture files without unsandboxed built-ins");
 
   const routineStart = awaitingGeneration.promise;
   const routineRun = await client.runRoutine(isolatedRoutine.id);

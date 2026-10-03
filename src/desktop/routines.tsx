@@ -7,7 +7,9 @@ import type { MessageSnapshot } from "../backend/contracts";
 import type { LinkedBot } from "./use-labora";
 import { computerClient } from "./client";
 import { Button, Icon, Label } from "./icons";
-import { color, font } from "./theme";
+import { color, font, terminalFont } from "./theme";
+import { ToolMessage } from "./tool-message";
+import { readableToolText, toolInput, toolTitle } from "../tool-presentation";
 import { AgentPlan, AgentQuestion } from "./agent-input";
 import { avatarActivityLabels } from "./avatar-motion";
 
@@ -76,29 +78,29 @@ function RoutineResults({ selected, routine, close }: { selected: LinkedBot; rou
   const question = snapshot?.pending.find(EventPayload.isAnyOf(["QuestionRequested"]));
 
   return <div testId="routine-conversation" style={{ display: "flex", flexDirection: "column", minHeight: 0, flexGrow: 1, gap: 12 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 8 }}>
       <Button id="routine-results-back" label="Back to routine" icon="back" onClick={close} />
-      <Label>{routine.name}</Label>
+      <Label style={{ minWidth: 0, flexShrink: 1, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{routine.name}</Label>
     </div>
     {error ? <Label size={12} style={{ color: color.error }}>{error}</Label> : null}
     <div style={{ display: "flex", flexDirection: "column", overflowY: "scroll", minHeight: 0, flexGrow: 1, gap: 14 }}>
       {snapshot && !snapshot.messages.length ? <Label secondary size={13}>No results yet</Label> : null}
-      {snapshot?.messages.map((message) => message.role === "assistant" && !message.text.trim() ? null : <div key={message.id} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 10, borderRadius: 10, backgroundColor: message.role === "user" ? color.surface : "transparent" }}>
+      {snapshot?.messages.map((message) => message.role === "assistant" && !message.text.trim() ? null : message.role === "tool" ? <ToolMessage key={message.id} message={message} /> : <div key={message.id} style={{ display: "flex", flexDirection: "column", flexShrink: 0, minWidth: 0, overflow: "hidden", gap: 4, padding: 10, backgroundColor: message.role === "user" ? "#263b45" : "transparent" }}>
         <Label secondary size={11}>{`${message.role === "user" ? "Instruction" : selected.bot.name} · ${new Date(message.createdAt).toLocaleTimeString()}`}</Label>
-        <markdown source={message.text} style={{ color: color.text, fontFamily: font, fontSize: 13, lineHeight: 20 }} />
+        <markdown source={message.text} theme={{ fontSans: terminalFont, fontMono: terminalFont, text: color.text, accent: "#b6a4db", metrics: { mdTextSize: 13, mdLineHeight: 20 } }} style={{ width: "100%", minWidth: 0 }} />
       </div>)}
       {snapshot?.plan ? <AgentPlan plan={snapshot.plan} /> : null}
       {snapshot?.activity && snapshot.activity.phase !== "idle" ? <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <Label size={12} secondary>{avatarActivityLabels[snapshot.activity.phase]}</Label>
-        {snapshot.activity.message && (snapshot.activity.phase === "working" || snapshot.activity.phase === "failed") ? <div testId="routine-tool-progress" style={{ maxHeight: 96, overflowY: "scroll" }}><Label size={12} secondary>{snapshot.activity.message}</Label></div> : null}
+        {snapshot.activity.message && snapshot.activity.phase === "failed" ? <div testId="routine-tool-progress" style={{ maxHeight: 96, overflowY: "scroll" }}><Label size={12} secondary>{readableToolText(snapshot.activity.message)}</Label></div> : null}
       </div> : null}
       {question ? <AgentQuestion key={question.requestId} question={question} answer={async (requestId, runId, answers) => {
         await computerClient(selected.connection).answerQuestion(selected.bot.id, requestId, { runId, answers }, conversationId);
         setRevision((value) => value + 1);
       }} /> : null}
       {approval ? <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, backgroundColor: color.surface }}>
-        <Label size={13}>Allow {approval.toolName}?</Label>
-        <Label size={12} secondary>{JSON.stringify(approval.input, null, 2)}</Label>
+        <Label size={13}>Allow {toolTitle(approval.toolName).toLowerCase()}?</Label>
+        <div style={{ maxHeight: 180, overflowY: "scroll" }}><Label size={12} secondary>{toolInput(approval.toolName, approval.input)}</Label></div>
         <div style={{ display: "flex", gap: 8 }}>
           <Button id="routine-approve" label="Approve routine action" onClick={() => { void act(computerClient(selected.connection).approve(selected.bot.id, approval.requestId, "approve")); }}><Label>Allow</Label></Button>
           <Button id="routine-deny" label="Deny routine action" onClick={() => { void act(computerClient(selected.connection).approve(selected.bot.id, approval.requestId, "deny")); }}><Label>Deny</Label></Button>
@@ -170,7 +172,7 @@ function RoutineEditor({ selected, routine, close, saved }: {
   }
 
   return <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flexGrow: 1, gap: 12, overflowY: "scroll", paddingBottom: 16 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 8 }}>
       <Button id="routine-editor-back" label="Back to routines" icon="back" onClick={close} />
       <Label>{routine ? "Edit routine" : "New routine"}</Label>
     </div>
@@ -272,9 +274,9 @@ export function Routines({ selected, onOpenChange }: { selected: LinkedBot; onOp
   if (routine && showResults) return <RoutineResults key={routine.id} selected={selected} routine={routine} close={() => setShowResults(false)} />;
 
   return <div testId="routines" style={{ display: "flex", flexDirection: "column", flexGrow: 1, minHeight: 0, gap: 12 }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 8, justifyContent: "space-between" }}>
       {routine ? <Button id="routine-back" label="Back to routines" icon="back" onClick={() => { setOpened(null); setConfirmDelete(false); }} /> : null}
-      <Label size={13} secondary={!routine}>{routine?.name ?? "Routines"}</Label>
+      <Label size={13} secondary={!routine} style={{ minWidth: 0, flexShrink: 1, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{routine?.name ?? "Routines"}</Label>
       {!routine ? <Button id="routine-new" label="New routine" icon="plus" onClick={() => { setOpened(null); setEditing(true); }} /> : null}
     </div>
     {error ? <Label size={12} style={{ color: color.error }}>{error}</Label> : null}
@@ -306,7 +308,7 @@ export function Routines({ selected, onOpenChange }: { selected: LinkedBot; onOp
     </> : <div style={{ display: "flex", flexDirection: "column", overflowY: "scroll", minHeight: 0, gap: 4 }}>
       {loaded && !routines.length ? <Label secondary size={13}>No routines yet</Label> : null}
       {routines.map((item) => <Button key={item.id} id={`routine-${item.id}`} label={item.name} onClick={() => { setOpened(item.id); setConfirmDelete(false); }} style={{ justifyContent: "space-between", padding: 10, gap: 8 }}>
-        <div style={{ display: "flex", flexDirection: "column", flexShrink: 1, gap: 3 }}>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flexShrink: 1, gap: 3 }}>
           <Label size={13}>{item.name}</Label>
           <Label size={11} secondary>{item.enabled ? scheduleLabel(item.schedule) : "Paused"}</Label>
         </div>

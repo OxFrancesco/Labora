@@ -2,6 +2,9 @@ import { render } from "@gpuix/react";
 import { App } from "./app";
 import { createDesktopStore } from "./store";
 import { closeAvatarRenderer } from "./avatar-renderer";
+import { installNativeCaptureCleanup } from "./native-capture";
+
+installNativeCaptureCleanup();
 
 process.once("exit", closeAvatarRenderer);
 

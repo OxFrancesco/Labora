@@ -109,7 +109,7 @@ try {
   assert.equal(new Set(pids).size, 2);
   assert.equal(await host.isBusy(), false);
   assert.equal(
-    (await request(host, "/one", "PATCH", { name: "Renamed", color: "#998877", label: "Inbox" }))
+    (await request(host, "/one", "PATCH", { name: "Renamed", color: "#998877" }))
       .status,
     200,
   );
@@ -152,7 +152,6 @@ try {
 
   assert.equal(stored.bots.length, 2);
   assert.equal(stored.bots[0]?.name, "Renamed");
-  assert.equal(stored.bots[0]?.label, "Inbox");
   const snapshot = await decode(MessageSnapshot, await request(restarted, "/one/messages"));
   assert.ok(snapshot.cursor > 1);
 } finally {

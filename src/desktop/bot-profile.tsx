@@ -6,7 +6,7 @@ import { CharacterPicker } from "./characters";
 
 export function BotProfile({ labora }: { labora: Labora }) {
   const bot = labora.selected?.bot;
-  const [editing, setEditing] = useState<"none" | "name" | "label" | "color">("none");
+  const [editing, setEditing] = useState<"none" | "name" | "color">("none");
   const [value, setValue] = useState("");
 
   if (!bot) return null;
@@ -14,7 +14,6 @@ export function BotProfile({ labora }: { labora: Labora }) {
   async function save() {
     if (editing === "name" && value.trim()) await labora.updateBot({ name: value.trim() });
 
-    if (editing === "label") await labora.updateBot({ label: value.trim() });
     setEditing("none");
   }
 
@@ -23,6 +22,8 @@ export function BotProfile({ labora }: { labora: Labora }) {
       style={{
         display: "flex",
         flexDirection: "column",
+        flexShrink: 0,
+        minWidth: 0,
         alignItems: "center",
         gap: 4,
         paddingTop: 10,
@@ -41,12 +42,13 @@ export function BotProfile({ labora }: { labora: Labora }) {
         <CharacterPicker
           value={bot.color}
           idPrefix="edit-color"
-          onChange={(value) =>
-            labora.attempt(labora.updateBot({ color: value }).then(() => setEditing("none")))
-          }
+          onChange={(value) => {
+            setEditing("none");
+            labora.attempt(labora.updateBot({ color: value }));
+          }}
         />
       ) : null}
-      {editing === "name" || editing === "label" ? (
+      {editing === "name" ? (
         <input
           autoFocus
           testId="edit-bot-value"
@@ -75,22 +77,9 @@ export function BotProfile({ labora }: { labora: Labora }) {
               setValue(bot.name);
               setEditing("name");
             }}
-            style={{ minHeight: 26 }}
+            style={{ minHeight: 26, maxWidth: "100%" }}
           >
-            <Label size={18}>{bot.name}</Label>
-          </Button>
-          <Button
-            id="edit-bot-label"
-            label="Edit bot label"
-            onClick={() => {
-              setValue(bot.label ?? "");
-              setEditing("label");
-            }}
-            style={{ minHeight: 24 }}
-          >
-            <Label size={12} secondary>
-              {bot.label || "Add a label"}
-            </Label>
+            <Label size={18} style={{ whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{bot.name}</Label>
           </Button>
         </>
       )}

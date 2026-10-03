@@ -35,6 +35,8 @@ await run([process.execPath, "scripts/build-desktop-helper.ts"]);
 
 await run([process.execPath, "scripts/build-avatar-renderer.ts"]);
 
+await run([process.execPath, "scripts/build-character-previews.ts"]);
+
 await mkdir(dist, { recursive: true });
 
 await run([
@@ -103,7 +105,7 @@ if (process.argv.includes("--computer")) {
       if (!existsSync(join(resources, path))) throw new Error("Missing bundled resource: " + path);
     }
     for (const name of ["spark", "cube", "pyramid", "star", "hexagon", "pebble"]) {
-      for (const extension of ["usdz", "glb", "blend"]) {
+      for (const extension of ["usdz", "glb", "blend", "rgba"]) {
         if (!existsSync(join(resources, "characters3d", name + "." + extension))) throw new Error("Missing bundled 3D character: " + name + "." + extension);
       }
     }
@@ -154,7 +156,7 @@ await cp(join(dist, "Labora Computer.app"), join(helpers, "Labora Computer.app")
 await mkdir(join(resources, "characters3d"), { recursive: true });
 
 for (const name of ["spark", "cube", "pyramid", "star", "hexagon", "pebble"]) {
-  for (const extension of ["usdz", "glb", "blend"]) {
+  for (const extension of ["usdz", "glb", "blend", "rgba"]) {
     const file = `${name}.${extension}`;
     await copyFile(join(root, "assets/characters3d", file), join(resources, "characters3d", file));
   }
@@ -191,6 +193,8 @@ for (const [source, target] of [
 
 await writeFile(join(app, "Contents/PkgInfo"), "APPL????");
 
+await copyFile(join(root, "assets/icons/Labora.icns"), join(resources, "Labora.icns"));
+
 await writeFile(join(app, "Contents/Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -198,6 +202,7 @@ await writeFile(join(app, "Contents/Info.plist"), `<?xml version="1.0" encoding=
 <key>CFBundleName</key><string>Labora</string>
 <key>CFBundleDisplayName</key><string>Labora</string>
 <key>CFBundleExecutable</key><string>Labora</string>
+<key>CFBundleIconFile</key><string>Labora.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleShortVersionString</key><string>${manifest.version}</string>

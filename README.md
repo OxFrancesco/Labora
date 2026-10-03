@@ -56,9 +56,9 @@ Create a bot on a connected computer, then open **Connect apps**. ChatGPT uses t
 
 The agent streams its messages and tool activity to the client. Characters show thinking, writing, tool use, questions, approval waiting, context compaction, retrying, completion, failure, cancellation, and reconnecting. Idle characters breathe and blink in Details. macOS Reduce Motion keeps distinct static poses, and background windows stop repeating animation frames. Background bot status does not start an idle Pi process.
 
-Executor operations requiring approval pause for a user decision. Files created in the bot's workspace appear in Library. Desktop control has explicit user/agent ownership and rejects input using stale frames or a different display.
+Connected Executor operations run without per-action approval prompts. Files created in the bot's workspace appear in Library. Desktop control has explicit user/agent ownership and rejects input using stale frames or a different display.
 
-Routines start paused and support a one-time date or recurring schedule. Each routine uses a separate Pi conversation, with its own results and approvals. The companion must be running when a routine is due. Missed runs are recorded without automatic replay. These conversations share the bot's host permissions and are not separate OS sandboxes.
+Routines start paused and support a one-time date or recurring schedule. Each routine uses a separate Pi conversation, with its own results and approvals. The companion must be running when a routine is due. Missed runs are recorded without automatic replay. These conversations share the bot's workspace sandbox.
 
 Settings saves sidebar, details-panel and dictation-language preferences. On macOS 14 or later, the microphone button offers on-device dictation when the selected language is available. You review the transcript before inserting it into the draft; it is never sent automatically.
 
@@ -66,7 +66,7 @@ For a headless ChatGPT sign-in, use `bun run agent login --headless`. Open the p
 
 Each bot keeps its own application registration. To connect a different ChatGPT account or workspace, create a separate bot instead of reusing another account's registration. A fresh Hydra bot successfully authenticated on 2026-10-02, answered through GPT-5.5, and selected Executor documentation tools through Pi code mode. The native client also passed real streaming, Stop, and transcript-restart checks. These local results do not authenticate a separate Cloudflare-hosted bot.
 
-Personal computers are trusted hosts. Separate bot directories and processes do not sandbox terminal access to that host. Cloudflare desktops instead run in their own containers. See [Cloudflare setup](cloud/README.md) and the [subscription eligibility findings](research/pi-chatgpt.md) before offering a shared hosted service.
+Workspace bash, read, write and edit run without approval prompts inside the OS sandbox. The sandbox allows workspace changes and public web access while denying reads and writes to personal files, sibling bot credentials, private networks and host control. Tools fail closed when sandbox support is unavailable. macOS uses Seatbelt; Linux requires the sandbox runtime dependencies. Commands have a 120-second default timeout, a 600-second maximum and a 16 MB output limit. Connected Executor tools run without per-action approval prompts and use the connected account. They are outside the local filesystem sandbox. Desktop input still requires approval because it can control the host outside that boundary. Executor sign-in can start, finish or be cancelled during an active task; newly connected tools refresh before the next task. Cloudflare desktops instead run in their own containers. See [Cloudflare setup](cloud/README.md) and the [subscription eligibility findings](research/pi-chatgpt.md) before offering a shared hosted service.
 
 ## Working with an agent
 

@@ -12,16 +12,18 @@ interface AvailableComputer {
   online: boolean;
   ready: boolean;
   platform?: string;
+  requiresCode?: boolean;
 }
 
 export interface ConnectionState {
-  stage: "checking" | "install" | "unavailable" | "signin" | "choose" | "approving" | "connected";
+  stage: "checking" | "install" | "unavailable" | "signin" | "choose" | "code" | "approving" | "connected";
   computers: AvailableComputer[];
   busy: boolean;
   loginPending: boolean;
   authUrl?: string;
   approvalUrl?: string;
   selectedName?: string;
+  selectedId?: string;
   connectedName?: string;
   error?: string;
   unavailableReason?: string;
@@ -40,6 +42,8 @@ function safeError(cause: unknown) {
 }
 
 const Selection = Schema.Struct({ id: Schema.String });
+
+const CodeSelection = Schema.Struct({ id: Schema.String, code: Schema.String.check(Schema.isPattern(/^\d{8}$/)) });
 
 const RemoteError = Schema.Struct({ error: Schema.Struct({ message: Schema.String }) });
 
@@ -113,7 +117,7 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
   function refresh(force = false) {
     if (refreshing) return refreshing;
 
-    if (closed || pairing || pendingCleanup || state.stage === "connected" || (!force && (state.error || Date.now() - lastRefresh < 5_000))) return Promise.resolve();
+    if (closed || pairing || pendingCleanup || state.stage === "connected" || state.stage === "code" || (!force && (state.error || Date.now() - lastRefresh < 5_000))) return Promise.resolve();
     lastRefresh = Date.now();
     state = { ...state, busy: true, error: undefined };
     refreshing = Effect.runPromise(Effect.tryPromise({
@@ -132,8 +136,8 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
 
  return; }
 
-        if (!status.ownerLogin || status.self?.tagged) {
-          state = { ...state, stage: "unavailable", computers: [], unavailableReason: "Use a Tailscale device signed in to your personal account to approve computer access." };
+        if (!status.self || (!status.ownerLogin && !status.self.tagged)) {
+          state = { ...state, stage: "unavailable", computers: [], unavailableReason: "Tailscale has not reported a usable device identity. Open Tailscale and check this device." };
 
           return;
         }
@@ -146,7 +150,7 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
           const chunk = await Promise.all(peers.slice(offset, offset + 4).map(async (peer) => {
             const result: AvailableComputer = { id: peer.id, name: peer.name, online: peer.online, ready: false };
 
-            if (!peer.online || !peer.dnsName || peer.tagged || peer.ownerLogin !== status.ownerLogin) return result;
+            if (!peer.online || !peer.dnsName) return result;
             const endpoint = `https://${peer.dnsName.replace(/\.$/, "")}/labora`;
 
             try {
@@ -160,7 +164,8 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
               if (metadata.endpoint !== endpoint) return result;
               endpoints.set(peer.id, endpoint);
 
-              return { ...result, name: metadata.name, ready: true, platform: metadata.platform };
+              return { ...result, name: metadata.name, ready: true, platform: metadata.platform,
+                requiresCode: metadata.approval === "code" || status.self?.tagged || peer.tagged || !status.ownerLogin || peer.ownerLogin !== status.ownerLogin };
             } catch { return result; }
           }));
 
@@ -180,7 +185,7 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
     return refreshing;
   }
 
-  async function beginPairing(id: string) {
+  async function beginPairing(id: string, code?: string) {
     if (pairing) throw new Error("Finish or cancel the current connection first.");
 
     if (pendingCleanup) throw new Error("Retry cancellation before starting another connection.");
@@ -188,6 +193,13 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
     const computer = state.computers.find((item) => item.id === id && item.ready);
 
     if (!endpoint || !computer) throw new Error("This computer is no longer available. Refresh the list and try again.");
+
+    if (computer.requiresCode && !code) {
+      state = { ...state, stage: "code", selectedId: id, selectedName: computer.name, error: undefined };
+
+      return;
+    }
+
     const attempt = new AbortController();
     pairing = attempt;
     const verifier = randomBytes(32).toString("base64url");
@@ -196,7 +208,7 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
     try {
       const response = await checked(await request(`${endpoint}/v1/enrollment`, {
         method: "POST", headers: { "Content-Type": "application/json" }, redirect: "error",
-        body: JSON.stringify({ clientName: `Labora on ${hostname()}`, challenge: createHash("sha256").update(verifier).digest("hex") }),
+        body: JSON.stringify({ clientName: `Labora on ${hostname()}`, challenge: createHash("sha256").update(verifier).digest("hex"), code }),
         signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
       }));
 
@@ -234,7 +246,7 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
         }
       };
 
-      state = { ...state, stage: "approving", approvalUrl: intent.approvalUrl, selectedName: computer.name, error: undefined };
+      state = { ...state, stage: "approving", approvalUrl: code ? undefined : intent.approvalUrl, selectedName: computer.name, error: undefined };
       void claim();
 
       async function claim() {
@@ -314,7 +326,7 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
       if (url.pathname === path && request.method === "GET") {
         const nonce = randomBytes(18).toString("base64url");
 
-        return new Response(connectionPage(nonce, session), { headers: { ...headers, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'` } });
+        return new Response(connectionPage(nonce, session), { headers: { ...headers, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": `default-src 'none'; img-src data:; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'` } });
       }
 
       const origin = request.headers.get("Origin");
@@ -338,6 +350,10 @@ export function startComputerConnection(options: ConnectionOptions): ConnectionW
             void login.done.then(() => refresh(true)).catch((error) => { if (!closed) state = { ...state, error: safeError(error) }; }).finally(() => { login = undefined; state = { ...state, loginPending: false }; });
           }
         } else if (action === "/api/connect") await beginPairing(Schema.decodeUnknownSync(Selection)(await request.json()).id);
+        else if (action === "/api/pair-code") {
+          const selection = Schema.decodeUnknownSync(CodeSelection)(await request.json());
+          await beginPairing(selection.id, selection.code);
+        }
         else if (action === "/api/cancel" || action === "/api/cleanup") {
           pairing?.abort();
           pairing = undefined;

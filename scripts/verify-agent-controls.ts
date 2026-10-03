@@ -27,6 +27,8 @@ const profileDirectory = join(workspace, "desktop");
 
 const source = process.argv.includes("--source");
 
+const layoutOnly = process.argv.includes("--layout-only");
+
 const draftOnly = process.argv.includes("--draft-only");
 
 const routinesOnly = process.argv.includes("--routines-and-draft");
@@ -170,7 +172,10 @@ try {
     clientId: "local-fixture", subject: "local-fixture", idToken: "local-fixture", scopes: ["chatgpt.tokens.use.direct"],
   } }), { mode: 0o600 });
   await writeFile(join(agentDir, "models.json"), JSON.stringify({ providers: { openai: { baseUrl: `${server.url.origin}/v1` } } }), { mode: 0o600 });
-  await writeFile(join(profileDirectory, "desktop.json"), JSON.stringify({ connections: [connection], selected: `${connection.id}/controls`, compact: true, detailsOpen: true, detailsWidth: 336, drafts: [] }), { mode: 0o600 });
+  const layoutAttachments = layoutOnly ? Array.from({ length: 4 }, (_, index) => join(workspace, `${index}-quarterly-product-review-with-supporting-documents-and-a-very-long-file-name-${"details-".repeat(10)}.txt`)) : [];
+
+  for (const path of layoutAttachments) await writeFile(path, "Layout verification attachment.");
+  await writeFile(join(profileDirectory, "desktop.json"), JSON.stringify({ connections: [connection], selected: `${connection.id}/controls`, compact: true, detailsOpen: true, detailsWidth: 336, drafts: layoutOnly ? [{ key: `${connection.id}/controls`, text: "", paths: layoutAttachments }] : [] }), { mode: 0o600 });
   driver = await openDesktop({ profileDirectory, evidenceDirectory, source, foreground: true });
   let app = driver.app;
   let native = driver;
@@ -208,7 +213,7 @@ try {
     next.text(text);
     next.finish();
     await waitUntil("task completion", async () => !(await snapshot()).busy);
-    await waitUntil("native completion", async () => (await app.getByTestId("bot-activity").textContent()).includes("Complete"));
+    await waitUntil("native completion", async () => await app.getByTestId("cancel").count() === 0);
   };
 
   const restart = async (name: string) => {
@@ -221,13 +226,17 @@ try {
     await readyAvatars();
   };
 
+  if (layoutOnly) {
+    const { verifyLayout } = await import("./verify-layout");
+    await verifyLayout({ app, client, send, capture, evidenceDirectory, checks, pending: () => pending.promise, generation, complete });
+  }
+
   const runProgress = async (model: Generation) => {
-    const gate = join(workspace, "continue-progress");
+    const gate = join(dataDir, "bots/controls/workspace/continue-progress");
     const next = pending.promise;
     model.tool("bash", { command: `printf 'FIRST_PROGRESS_MARKER\\n'; while [ ! -f '${gate}' ]; do sleep 0.1; done; printf 'LAST_PROGRESS_MARKER\\n'` });
-    await app.getByTestId("approve-tool").waitFor();
-    await app.getByTestId("approve-tool").click();
-    await waitUntil("bounded native tool output", async () => await app.getByTestId("tool-progress").count() > 0 && (await app.getByTestId("tool-progress").textContent()).includes("FIRST_PROGRESS_MARKER"));
+
+    await waitUntil("bounded native tool output", async () => (await app.getByTestId("transcript").textContent()).includes("FIRST_PROGRESS_MARKER"));
     assert.equal((await snapshot()).busy, true);
     await capture("11-tool-progress");
     await writeFile(gate, "continue\n");
@@ -235,7 +244,7 @@ try {
     return generation(next);
   };
 
-  if (!draftOnly && !routinesOnly && !questionOnly) {
+  if (!layoutOnly && !draftOnly && !routinesOnly && !questionOnly) {
     const first = await send("Ask me how to format the response.");
     first.tool("ask_user", { questions: [
       { id: "format", question: "How much detail should I include?", options: ["Brief", "Detailed"] },
@@ -367,7 +376,7 @@ try {
     assert.ok((await snapshot()).plan?.steps.every((step) => step.status === "completed"));
     await waitUntil("finished progress removed", async () => await app.getByTestId("tool-progress").count() === 0);
     await capture("12-plan-complete");
-    checks.push("A real update_plan call paints a checklist and its state survives native restart", "Real bash output paints before the tool completes, then clears", "A completed plan preserves all completed step statuses");
+    checks.push("A real update_plan call paints a checklist and its state survives native restart", "Real bash output paints before the tool completes and remains in the transcript", "A completed plan preserves all completed step statuses");
 
   }
 
@@ -455,9 +464,9 @@ try {
     await app.getByTestId("routine-back").click();
   };
 
-  if (!draftOnly) await verifyRoutines();
+  if (!layoutOnly && !draftOnly) await verifyRoutines();
 
-  if (!questionOnly) {
+  if (!layoutOnly && !questionOnly) {
     const savedAttachment = join(workspace, "Keep this note.txt");
     await writeFile(savedAttachment, "This attachment belongs to an unsent draft.\n");
     const clipboardFixture = join(workspace, "clipboard-fixture");

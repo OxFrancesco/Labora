@@ -146,7 +146,7 @@ try {
   await app.mouse.move({ x: 620, y: 35 });
 
   const state = async (label: string, name: string) => {
-    await waitUntil(label, async () => (await app.getByTestId("bot-activity").textContent()).includes(label));
+    await waitUntil(label, async () => label === "Complete" ? await app.getByTestId("cancel").count() === 0 : (await app.getByTestId("bot-activity").textContent()).includes(label));
     await native.screenshot(name);
     checks.push(`Native activity shows ${label}`);
   };
@@ -218,8 +218,7 @@ try {
   const tool = await send("Request the harmless local tool fixture.");
   const afterTool = pending.promise;
   tool.tool("bash", { command: "sleep 5; printf 'Activity fixture completed\\n'" });
-  await state("Waiting for approval", "09-waiting");
-  await app.getByTestId("approve-tool").click();
+  assert.equal(await app.getByTestId("approve-tool").count(), 0);
   await state("Using tools", "10-working");
   await movement("working");
   const final = await afterTool;
@@ -228,12 +227,14 @@ try {
   await state("Complete", "11-tool-complete");
 
   const declined = await send("Request the tool fixture to decline.");
-  declined.tool("write", { path: "must-not-exist.txt", content: "This must be denied." });
-  await state("Waiting for approval", "12-before-decline");
-  await app.getByTestId("deny-tool").click();
-  await state("Stopped", "13-declined");
-  assert.equal(await Bun.file(join(dataDir, "bots/motion/workspace/must-not-exist.txt")).exists(), false);
-  checks.push("Native approval resumes a real tool; native decline prevents a filesystem write");
+  const blockedReply = pending.promise;
+  const forbidden = join(dataDir, "must-not-exist.txt");
+  declined.tool("write", { path: forbidden, content: "This must be denied." });
+  const blocked = await blockedReply;
+  blocked.text("The sandbox blocked writing outside the workspace."); blocked.finish();
+  await state("Complete", "13-sandbox-blocked");
+  assert.equal(await Bun.file(forbidden).exists(), false);
+  checks.push("Workspace commands run automatically; the sandbox prevents an outside-workspace write");
 } catch (error) {
   failure = error instanceof Error ? error : new Error(String(error));
 

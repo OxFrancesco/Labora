@@ -242,6 +242,9 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
       return response(yield* host.request(id, ChildCommand.cases.AuthStart.make(input)), 202);
     }
 
+    if (route === "auth" && segments[5] === "cancel" && request.method === "POST")
+      return response(yield* host.request(id, ChildCommand.cases.AuthCancel.make({})));
+
     if (route === "auth" && segments[5] === "input" && request.method === "POST") {
       const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(AuthInput))(
         yield* readBody(request),

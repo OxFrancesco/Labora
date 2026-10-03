@@ -23,6 +23,7 @@ export class ComputerAuthority extends Context.Service<ComputerAuthority, {
   confirmGrant: (clientId: string) => Effect.Effect<void, ComputerError>;
   revoke: (clientId: string) => Effect.Effect<void, ComputerError>;
   issuePairingCode: () => Effect.Effect<PairingCode>;
+  consumePairingCode: (code: string) => Effect.Effect<void, ComputerError>;
 }>()("labora/ComputerAuthority") {}
 
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -72,6 +73,16 @@ export const authorityLayer = (dataDir: string) => Layer.effect(ComputerAuthorit
     return { token, clientId };
   });
 
+  const consumePairingCode = Effect.fn("ComputerAuthority.consumePairingCode")((code: string) => semaphore.withPermit(Effect.gen(function* () {
+    if (!pairing || pairing.expiresAt <= Date.now() || pairing.attemptsRemaining <= 0)
+      return yield* Effect.fail(new ComputerError({ status: 403, code: "pairing_expired", message: "Create a new pairing code on the computer" }));
+    pairing.attemptsRemaining -= 1;
+
+    if (!equal(pairing.code, code))
+      return yield* Effect.fail(new ComputerError({ status: 403, code: "pairing_invalid", message: "Pairing code is invalid" }));
+    pairing = undefined;
+  })));
+
   return ComputerAuthority.of({
     computerId: state.id,
     authenticate: Effect.fn("ComputerAuthority.authenticate")(function* (token: string) {
@@ -115,5 +126,6 @@ export const authorityLayer = (dataDir: string) => Layer.effect(ComputerAuthorit
 
       return { ...pairing };
     })),
+    consumePairingCode,
   });
 }));

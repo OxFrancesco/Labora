@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useGpuixRequired } from "@gpuix/react";
 import type { ImgInstance, PublicInstance } from "@gpuix/react";
+import { avatarPreview } from "./avatar-preview";
 import { animateAvatar } from "./avatar-animation";
 import { avatarActivityLabels } from "./avatar-motion";
 import type { AvatarActivity } from "./avatar-motion";
@@ -28,7 +29,15 @@ export function Avatar3D({ modelPath, name, size, interactive = false, activity 
   const [error, setError] = useState("");
   const pixels = Math.min(512, Math.max(64, Math.round(size * 2)));
 
+  useLayoutEffect(() => {
+    image.current?.setImagePixels(160, 160, avatarPreview(modelPath));
+    displayed.current = true;
+    setReady(true);
+  }, [modelPath]);
+
   useEffect(() => {
+    if (size < 64 && activity === "idle") return;
+
     const active = activity === "thinking" || activity === "compacting" || activity === "streaming" || activity === "working" || activity === "waiting" || activity === "asking" || activity === "retrying";
     const terminal = activity === "complete" || activity === "failed" || activity === "cancelled";
 

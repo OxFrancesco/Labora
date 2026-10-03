@@ -3,7 +3,9 @@ import { useGpuixRequired, useWindowSize } from "@gpuix/react";
 import { basename, join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { Avatar, Button, Icon, Label } from "./icons";
-import { color, font } from "./theme";
+import { ToolMessage } from "./tool-message";
+import { toolTitle } from "../tool-presentation";
+import { color, font, terminalFont } from "./theme";
 import { ConnectComputer, ConnectionsDialog, CreateBotDialog } from "./dialogs";
 import { Settings } from "./settings";
 import { Routines } from "./routines";
@@ -19,7 +21,7 @@ import type { DesktopStore } from "./use-labora";
 
 type Tab = "Details" | "Library" | "Computer";
 
-type Dialog = "none" | "computer" | "bot" | "apps" | "settings";
+type Dialog = "none" | "computer" | "bot" | "apps" | "signin" | "settings";
 
 interface AppProps {
   store: DesktopStore;
@@ -40,13 +42,13 @@ export function App({ store }: AppProps) {
   const voice = useVoiceInput({ contextKey: selected?.key ?? null, locale: labora.preferences.voiceLocale || undefined });
   const recording = voice.state.kind === "requesting" || voice.state.kind === "listening" || voice.state.kind === "finishing";
   const bot = selected?.bot;
-  const compact = labora.preferences.compact;
+  const compact = labora.preferences.compact || (labora.preferences.detailsOpen && !!bot && window.width < 1000);
   const sidebarWidth = compact ? 92 : 248;
   const detailsOpen = labora.preferences.detailsOpen && !!bot && !expandedComputer;
 
   const detailWidth = Math.min(
     labora.preferences.detailsWidth,
-    Math.max(260, window.width - sidebarWidth - 360),
+    Math.max(280, window.width - sidebarWidth - 363),
   );
 
   useEffect(() => {
@@ -66,6 +68,13 @@ export function App({ store }: AppProps) {
 
   function newBot() {
     setDialog(labora.preferences.connections.length ? "bot" : "computer");
+  }
+
+  async function sendMessage() {
+    if (recording) return;
+    const result = await labora.send(inputMode);
+
+    if (result === "signin") setDialog("signin");
   }
 
   async function chooseFiles() {
@@ -100,6 +109,7 @@ export function App({ store }: AppProps) {
 
   return (
     <div
+      testId="app-layout"
       onFileDrop={(event) => {
         if (event.paths) labora.attempt(labora.addAttachments(event.paths));
       }}
@@ -224,7 +234,7 @@ export function App({ store }: AppProps) {
             id="sidebar-toggle"
             label="Toggle compact sidebar"
             icon="panel"
-            onClick={() => labora.updatePreferences({ compact: !compact })}
+            onClick={() => labora.updatePreferences({ compact: !labora.preferences.compact })}
             style={{ justifyContent: compact ? "center" : "flex-start", gap: 12 }}
           >
             {compact ? null : <Label secondary>Collapse sidebar</Label>}
@@ -267,6 +277,8 @@ export function App({ store }: AppProps) {
         <div
           style={{
             height: 62,
+            paddingLeft: 64,
+            paddingRight: 64,
             flexShrink: 0,
             display: "flex",
             justifyContent: "center",
@@ -279,6 +291,8 @@ export function App({ store }: AppProps) {
             label="View conversation details"
             onClick={toggleDetails}
             style={{
+              maxWidth: "100%",
+              minWidth: 0,
               borderRadius: 24,
               backgroundColor: "#181818",
               borderWidth: 1,
@@ -289,7 +303,7 @@ export function App({ store }: AppProps) {
             }}
           >
             <Avatar key={selected?.key ?? "new"} tint={bot?.color ?? "#777777"} size={26} activity={labora.botActivity.phase} activityKey={labora.botActivity.runId} />
-            <Label>{bot?.name ?? "New chat"}</Label>
+            <Label style={{ minWidth: 0, flexShrink: 1, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{bot?.name ?? "New chat"}</Label>
           </Button>
           <div style={{ position: "absolute", right: 12, display: "flex", gap: 8 }}>
             <Button
@@ -305,6 +319,7 @@ export function App({ store }: AppProps) {
           <ComputerView selected={selected} expanded onExpand={() => setExpandedComputer(false)} />
         ) : (
           <>
+            <div testId="conversation-body" style={{ flexGrow: 1, flexBasis: 0, minHeight: 0, minWidth: 0, display: "flex", paddingLeft: 16, paddingRight: 16 }}>
             <virtual-list
               testId="transcript"
               role="log"
@@ -315,8 +330,6 @@ export function App({ store }: AppProps) {
                 flexGrow: 1,
                 minHeight: 0,
                 width: "100%",
-                paddingLeft: 16,
-                paddingRight: 16,
                 paddingBottom: 18,
               }}
             >
@@ -332,31 +345,34 @@ export function App({ store }: AppProps) {
                   }}
                 >
                   {message.role === "tool" ? (
-                    <Label secondary size={12}>
-                      {message.toolName ?? "Tool"}
-                    </Label>
+                    <ToolMessage message={message} />
                   ) : (
                     <div
                       style={{
-                        maxWidth: "80%",
+                        width: "100%",
+                        minWidth: 0,
+                        overflow: "hidden",
                         paddingLeft: 13,
                         paddingRight: 13,
                         paddingTop: 8,
                         paddingBottom: 8,
-                        backgroundColor: message.role === "user" ? "#505050" : color.surface,
-                        borderRadius: 20,
+                        backgroundColor: message.role === "user" ? "#263b45" : "transparent",
+                        borderRadius: 0,
                       }}
                     >
                       <markdown
                         source={message.text}
+                        theme={{ fontSans: terminalFont, fontMono: terminalFont, text: color.text, accent: "#b6a4db", metrics: { mdTextSize: 14, mdLineHeight: 23 } }}
                         onLinkClick={(event) => {
                           if (event.value?.startsWith("https://"))
                             Bun.spawn(["/usr/bin/open", event.value]);
                         }}
                         style={{
+                          width: "100%",
+                          minWidth: 0,
                           color: color.text,
-                          fontFamily: font,
-                          fontSize: 15,
+                          fontFamily: terminalFont,
+                          fontSize: 14,
                           lineHeight: 23,
                         }}
                       />
@@ -390,14 +406,12 @@ export function App({ store }: AppProps) {
                 </div>
               ) : null}
               {labora.plan ? <AgentPlan plan={labora.plan} /> : null}
-              {labora.botActivity.phase !== "idle" ? (
+              {!["idle", "complete"].includes(labora.botActivity.phase) ? (
                 <div testId="bot-activity" role="status" aria-label={avatarActivityLabels[labora.botActivity.phase]} style={{ paddingTop: 12, paddingBottom: 12 }}>
                   <Label secondary style={{ color: labora.botActivity.phase === "failed" ? color.error : color.secondary }}>
                     {avatarActivityLabels[labora.botActivity.phase]}
                   </Label>
-                  {labora.botActivity.phase === "working" && labora.botActivity.message ? <div testId="tool-progress" style={{ maxHeight: 96, overflowY: "scroll", marginTop: 6 }}>
-                    <Label size={12} secondary>{labora.botActivity.message}</Label>
-                  </div> : null}
+
                 </div>
               ) : null}
               {labora.question ? <AgentQuestion key={labora.question.requestId} question={labora.question} answer={labora.answerQuestion} /> : null}
@@ -413,10 +427,8 @@ export function App({ store }: AppProps) {
                     gap: 10,
                   }}
                 >
-                  <Label>Allow {labora.approval.toolName}?</Label>
-                  <Label size={12} secondary>
-                    {labora.approval.input}
-                  </Label>
+                  <Label>{`Allow ${toolTitle(labora.approval.toolName).toLowerCase()}?`}</Label>
+                  <div style={{ maxHeight: 160, overflowY: "scroll", minWidth: 0 }}><Label size={12} secondary style={{ fontFamily: terminalFont }}>{labora.approval.input || "This action uses a connected app or controls your computer."}</Label></div>
                   <div style={{ display: "flex", gap: 12 }}>
                     <Button
                       id="approve-tool"
@@ -437,6 +449,7 @@ export function App({ store }: AppProps) {
                 </div>
               ) : null}
             </virtual-list>
+            </div>
             <div
               style={{
                 paddingLeft: 16,
@@ -448,6 +461,7 @@ export function App({ store }: AppProps) {
                 gap: 8,
               }}
             >
+              <div testId="composer-context" style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: Math.floor(window.height * 0.24), overflowY: "scroll", minHeight: 0 }}>
               {labora.error ? (
                 <div
                   style={{
@@ -469,12 +483,15 @@ export function App({ store }: AppProps) {
                 </div>
               ) : null}
               {labora.draft.paths.length ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, flexShrink: 0 }}>
                   {labora.draft.paths.map((path, index) => (
                     <div
                       key={path}
                       testId={`attachment-${index}`}
                       style={{
+                        minWidth: 0,
+                        maxWidth: "100%",
+                        flexShrink: 0,
                         display: "flex",
                         alignItems: "center",
                         gap: 6,
@@ -484,7 +501,7 @@ export function App({ store }: AppProps) {
                       }}
                     >
                       <Icon name="file" size={16} />
-                      <Label size={12}>{basename(path).replace(/^[a-f0-9-]{36}-/, "")}</Label>
+                      <Label size={12} style={{ minWidth: 0, flexShrink: 1, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{basename(path).replace(/^[a-f0-9-]{36}-/, "")}</Label>
                       <Button
                         id={`remove-attachment-${index}`}
                         label="Remove attachment"
@@ -528,20 +545,23 @@ export function App({ store }: AppProps) {
                 </div>
               ) : null}
               <QueuedInputs items={labora.queuedInputs} />
-              {labora.busy ? <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              </div>
+              {labora.busy ? <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
                 <Button id="input-mode-steer" label="Update task after the current step" active={inputMode === "steer"} onClick={() => setInputMode("steer")}><Label size={12}>After current step</Label></Button>
                 <Button id="input-mode-follow-up" label="Send after this task" active={inputMode === "followUp"} onClick={() => setInputMode("followUp")}><Label size={12}>After this task</Label></Button>
               </div> : null}
               <div
+                testId="composer-row"
                 style={{
                   display: "flex",
+                  flexShrink: 0,
                   alignItems: "flex-end",
                   gap: 8,
                   padding: 8,
-                  backgroundColor: color.composer,
-                  borderRadius: 25,
+                  backgroundColor: color.canvas,
+                  borderRadius: 2,
                   borderWidth: 1,
-                  borderColor: "#373737",
+                  borderColor: "#766c96",
                 }}
               >
                 <Button
@@ -561,24 +581,24 @@ export function App({ store }: AppProps) {
                   testId="composer"
                   aria-label="Prompt"
                   value={labora.draft.text}
-                  placeholder={labora.busy ? inputMode === "steer" ? "Update this task…" : "Message after this task…" : `Message ${bot?.name ?? "Bot"}`}
+                  placeholder={labora.busy ? inputMode === "steer" ? "Update this task…" : "Message after this task…" : "Message…"}
                   onKeyDown={(event) => {
                     if (dialog === "none" && event.modifiers?.cmd && event.key === "v") labora.attempt(pasteAttachments());
                   }}
                   onChange={(event) =>
                     labora.changeDraft({ ...labora.draft, text: event.value ?? "" })
                   }
-                  onSubmit={() => { if (!recording) labora.attempt(labora.send(inputMode)); }}
+                  onSubmit={() => labora.attempt(sendMessage())}
                   minRows={1}
-                  maxRows={8}
+                  maxRows={window.height < 650 ? 4 : 8}
                   style={{
                     flexGrow: 1,
                     minWidth: 0,
                     paddingTop: 4,
                     paddingBottom: 3,
                     color: color.text,
-                    fontFamily: font,
-                    fontSize: 15,
+                    fontFamily: terminalFont,
+                    fontSize: 14,
                     lineHeight: 22,
                     backgroundColor: "transparent",
                   }}
@@ -606,7 +626,7 @@ export function App({ store }: AppProps) {
                     id="send"
                     label={labora.busy ? inputMode === "steer" ? "Send task update" : "Queue follow-up" : "Send message"}
                     icon="send"
-                    onClick={() => { if (!recording) labora.attempt(labora.send(inputMode)); }}
+                    onClick={() => labora.attempt(sendMessage())}
                     style={{ width: 30, height: 30, borderRadius: 16, backgroundColor: recording ? "#555555" : "#eeeeee" }}
                   />
                 ) : null}
@@ -672,6 +692,7 @@ export function App({ store }: AppProps) {
             <div
               style={{
                 height: 62,
+                flexShrink: 0,
                 display: "flex",
                 justifyContent: "flex-end",
                 alignItems: "center",
@@ -692,10 +713,11 @@ export function App({ store }: AppProps) {
                 }}
               />
             </div>
+            <div testId="details-content" style={{ display: "flex", flexDirection: "column", flexGrow: 1, minHeight: 0, overflowY: "scroll", paddingBottom: 14 }}>
             {!routineOpen ? <BotProfile key={selected.key} labora={labora} /> : null}
             {!routineOpen ? <div
               role="tablist"
-              style={{ display: "flex", justifyContent: "center", gap: 4, paddingBottom: 22 }}
+              style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", flexShrink: 0, gap: 4, paddingBottom: 18 }}
             >
               {(["Details", "Library", "Computer"] satisfies Tab[]).map((item) => (
                 <Button
@@ -713,7 +735,7 @@ export function App({ store }: AppProps) {
               ))}
             </div> : null}
             {tab === "Details" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, flexGrow: 1, minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, flexGrow: 1, minHeight: routineOpen ? 0 : 180, flexShrink: routineOpen ? 1 : 0 }}>
                 <Routines key={selected.key} selected={selected} onOpenChange={setRoutineOpen} />
                 {!routineOpen ? <><Button
                   id="details-apps"
@@ -753,6 +775,7 @@ export function App({ store }: AppProps) {
                 onExpand={() => setExpandedComputer(true)}
               />
             ) : null}
+            </div>
           </div>
         </>
       ) : null}
@@ -762,8 +785,8 @@ export function App({ store }: AppProps) {
       {dialog === "bot" ? (
         <CreateBotDialog labora={labora} close={() => setDialog("none")} />
       ) : null}
-      {dialog === "apps" ? (
-        <ConnectionsDialog labora={labora} close={() => setDialog("none")} />
+      {dialog === "apps" || dialog === "signin" ? (
+        <ConnectionsDialog labora={labora} signInRequired={dialog === "signin"} close={() => setDialog("none")} />
       ) : null}
       {dialog === "settings" ? (
         <Settings labora={labora} close={() => setDialog("none")} connectComputer={() => setDialog("computer")} connectApps={() => setDialog("apps")} />

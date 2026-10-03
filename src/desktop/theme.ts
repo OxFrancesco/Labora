@@ -14,6 +14,8 @@ export const color = {
   error: "#ee8b86",
 };
 
+export const terminalFont = "Menlo";
+
 export const font = ".AppleSystemUIFont";
 
 export const botColors = characters.map((character) => character.color);

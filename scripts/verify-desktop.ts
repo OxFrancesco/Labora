@@ -359,15 +359,12 @@ try {
     await waitUntil("divider moved", async () => (await divider.bounds()).x < before.x - 40);
   });
 
-  await step("Bot name and label edits persist in the companion", "06-profile-edited", async () => {
+  await step("Bot name edits persist and labels are absent", "06-profile-edited", async () => {
     await app.getByTestId("edit-bot-name").click();
     await app.getByTestId("edit-bot-value").fill("Research Notes");
     await app.getByTestId("edit-bot-value").press("enter");
     await waitUntil("bot name saved", async () => (await client.bots()).find((bot) => bot.id === research.id)?.name === "Research Notes");
-    await app.getByTestId("edit-bot-label").click();
-    await app.getByTestId("edit-bot-value").fill("Planning");
-    await app.getByTestId("edit-bot-value").press("enter");
-    await waitUntil("bot label saved", async () => (await client.bots()).find((bot) => bot.id === research.id)?.label === "Planning");
+    assert.equal(await app.getByTestId("edit-bot-label").count(), 0);
   });
 
   await step("The native character picker renders all six Blender models", "06-character-picker", async () => {
@@ -495,12 +492,23 @@ try {
     await app.getByTestId("attachment-1").waitFor();
   });
 
-  await step("A real signed-out send rejection preserves the draft and attachments", "13-sign-in-required", async () => {
+  await step("Sending while signed out opens an actionable ChatGPT prompt", "13-sign-in-required", async () => {
     await app.getByTestId("send").click();
-    await waitUntil("honest ChatGPT sign-in requirement", async () => (await app.call("getPaintedText", {})).text.join("\n").includes("Sign in with your ChatGPT subscription"));
+    await app.getByTestId("connection-openai").waitFor();
+    await waitUntil("painted sign-in prompt", async () => (await app.call("getPaintedText", {})).text.join("\n").includes("Continue with ChatGPT"));
+    const text = (await app.call("getPaintedText", {})).text.join("\n");
+    assert(text.includes("Sign in with ChatGPT") && text.includes("Continue with ChatGPT"));
+    assert(!text.includes("Sign in with your ChatGPT subscription before sending"));
+    assert.equal((await client.messages(research.id)).messages.length, 0);
+  });
+
+  await step("Closing sign-in preserves the draft and attachments; Enter opens it again", "14-sign-in-retry", async () => {
+    await app.getByTestId("sheet-close").click();
     assert((await app.call("getPaintedText", {})).text.join("\n").includes(secondDraft));
     assert((await app.getByTestId("attachment-0").textContent()).includes("Second note.txt"));
     assert((await app.getByTestId("attachment-1").textContent()).includes("Pasted image.png"));
+    await app.getByTestId("composer").press("enter");
+    await app.getByTestId("connection-openai").waitFor();
     assert.equal((await client.messages(research.id)).messages.length, 0);
   });
 } catch (error) {

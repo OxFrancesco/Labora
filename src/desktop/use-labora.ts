@@ -1,3 +1,4 @@
+import { toolInput } from "../tool-presentation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { basename, join } from "node:path";
 import { copyFile, mkdir } from "node:fs/promises";
@@ -23,6 +24,20 @@ export interface LinkedBot {
   bot: Bot;
   connection: Connection;
   key: string;
+}
+
+interface BotChanges {
+  confirmed: Bot;
+  pending: { id: string; update: UpdateBot }[];
+  tail: Promise<void>;
+}
+
+function visibleBot(changes: BotChanges): Bot {
+  const bot = { ...changes.confirmed };
+
+  for (const change of changes.pending) Object.assign(bot, change.update);
+
+  return bot;
 }
 
 interface Approval {
@@ -63,6 +78,7 @@ export function useLabora(store: DesktopStore) {
   const currentSelection = useRef(selected);
   const sending = useRef(new Set<string>());
   const queuedAttempts = useRef(new Map<string, { signature: string; id: string }>());
+  const botChanges = useRef(new Map<string, BotChanges>());
   const authStarts = useRef(new Map<string, Promise<void>>());
   const authCancellations = useRef(new Map<string, Promise<void>>());
   const authVersions = useRef(new Map<string, number>());
@@ -116,7 +132,11 @@ export function useLabora(store: DesktopStore) {
         );
     }
 
-    setBots(available);
+    setBots(available.map((item) => {
+      const changes = botChanges.current.get(item.key);
+
+      return changes ? { ...item, bot: visibleBot(changes) } : item;
+    }));
   }, [preferences.connections]);
 
   useEffect(() => {
@@ -215,7 +235,7 @@ export function useLabora(store: DesktopStore) {
         ApprovalRequested: ({ requestId, toolName, input }) =>
           setApprovals((current) => [
             ...current.filter((item) => item.requestId !== requestId),
-            { requestId, toolName, input: JSON.stringify(input, null, 2) },
+            { requestId, toolName, input: toolInput(toolName, input) },
           ]),
         ApprovalResolved: ({ requestId }) =>
           setApprovals((current) => current.filter((item) => item.requestId !== requestId)),
@@ -451,6 +471,19 @@ export function useLabora(store: DesktopStore) {
     sending.current.add(targetKey);
 
     try {
+      if (!busy) {
+        const status = await computerClient(target.connection).auth(target.bot.id);
+
+        if (!isCurrent(target)) return;
+        setAuth(status);
+
+        if (status.openai !== "ready") {
+          setError("");
+
+          return "signin" as const;
+        }
+      }
+
       const attachments = await Promise.all(
         submitted.paths.map(async (path) => {
           const file = Bun.file(path);
@@ -502,11 +535,35 @@ export function useLabora(store: DesktopStore) {
   }
 
   async function updateBot(update: UpdateBot) {
-    if (!selected) return;
-    const bot = await computerClient(selected.connection).updateBot(selected.bot.id, update);
-    setBots((current) =>
-      current.map((item) => (item.key === selected.key ? { ...item, bot } : item)),
-    );
+    const target = currentSelection.current;
+
+    if (!target) return;
+    setError("");
+    const changes = botChanges.current.get(target.key) ?? { confirmed: target.bot, pending: [], tail: Promise.resolve() };
+    botChanges.current.set(target.key, changes);
+    const mutation = { id: crypto.randomUUID(), update };
+    changes.pending.push(mutation);
+
+    const paint = () => {
+      const bot = visibleBot(changes);
+      setBots((current) => current.map((item) => item.key === target.key ? { ...item, bot } : item));
+    };
+
+    paint();
+
+    const saved = changes.tail.then(async () => {
+      try {
+        changes.confirmed = await computerClient(target.connection).updateBot(target.bot.id, update);
+      } finally {
+        changes.pending = changes.pending.filter((item) => item.id !== mutation.id);
+        paint();
+
+        if (!changes.pending.length) botChanges.current.delete(target.key);
+      }
+    });
+
+    changes.tail = saved.catch(() => undefined);
+    await saved;
   }
 
   async function cancel() {
@@ -553,7 +610,7 @@ export function useLabora(store: DesktopStore) {
           await authStarts.current.get(target.key)?.catch(() => undefined);
           const status = await client.auth(target.bot.id);
 
-          if (status.active) await client.cancel(target.bot.id);
+          if (status.active) await client.cancelAuth(target.bot.id);
 
           if (isCurrent(target)) {
             setAuthLink("");

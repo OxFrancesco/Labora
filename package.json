@@ -13,6 +13,7 @@
     "verify:desktop": "bun scripts/verify-desktop.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.78",
     "@earendil-works/pi-coding-agent": "1.0.0",
     "@effect/platform-bun": "4.0.0",
     "@gpuix/native": "0.10.0",

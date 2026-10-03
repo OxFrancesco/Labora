@@ -71,6 +71,7 @@ const adapter: ReturnType<typeof createTailscaleAdapter> = {
 };
 
 const host = {
+  issuePairingCode: () => companion.issuePairingCode(),
   async enableEnrollment(configuration: Parameters<typeof companion.enableEnrollment>[0]) { enrollmentCalls += 1; await companion.enableEnrollment(configuration); },
   disableEnrollment() { disabledCalls += 1; companion.disableEnrollment(); },
 };
