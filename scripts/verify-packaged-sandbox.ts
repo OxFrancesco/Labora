@@ -24,7 +24,10 @@ const calls = [
   { name: "codemode", arguments: { code: 'const result = await tools.bash({command: "printf CODEMODE_OK"}); text(result.output);' } },
 ];
 
-const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch() {
+const selections: { model: string; reasoning: { effort: string } }[] = [];
+
+const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+  selections.push(Schema.decodeUnknownSync(Schema.Struct({ model: Schema.String, reasoning: Schema.Struct({ effort: Schema.String }) }))(await request.json()));
   const id = `packaged-${turn}`;
   const call = calls[turn++];
 
@@ -99,6 +102,8 @@ try {
   await Promise.race([ready.promise, completed.promise]);
   child.stdin.write(JSON.stringify(ChildRequest.make({ id: "prompt", command: ChildCommand.cases.Prompt.make({ runId: "sandbox", message: { text: "Verify sandbox tool execution." } }) })) + "\n");
   await completed.promise;
+  assert.ok(selections.length > 0);
+  assert.ok(selections.every(selection => selection.model === "gpt-6-astra" && selection.reasoning.effort === "high"), "Every compiled worker request must use Astra with high reasoning by default");
   assert.equal(await Bun.file(join(root, "bots/fixture/workspace/note.txt")).text(), "PACKAGED_OK");
   assert.equal(await Bun.file(sentinel).text(), "preserve-me");
   assert.equal(tools.some(EventPayload.isAnyOf(["ApprovalRequested"])), false);
@@ -115,7 +120,7 @@ finally {
   await child.exited;
   lines.close();
   await server.stop(true);
-  await writeFile(join(evidence, "result.json"), JSON.stringify({ ok: !failure, error: failure?.message, tools, stderr: await logs, boundary: "Compiled packaged Pi worker with minimal PATH; real Seatbelt execution and public HTTPS; isolated provider fixture." }, null, 2));
+  await writeFile(join(evidence, "result.json"), JSON.stringify({ ok: !failure, error: failure?.message, selections, tools, stderr: await logs, boundary: "Compiled packaged Pi worker with minimal PATH; real Seatbelt execution and public HTTPS; isolated provider fixture." }, null, 2));
 
   if (!failure) await rm(root, { recursive: true, force: true });
 }

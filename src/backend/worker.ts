@@ -63,7 +63,7 @@ interface ComputerCall {
 const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   const dataDir = yield* Config.String("LABORA_DATA_DIR");
   const botId = yield* Config.String("LABORA_BOT_ID");
-  const modelId = yield* Config.String("LABORA_OPENAI_MODEL").pipe(Config.withDefault("gpt-5.5"));
+  const modelId = yield* Config.String("LABORA_OPENAI_MODEL").pipe(Config.withDefault("gpt-6-astra"));
 
   const executorUrl = yield* Config.String("LABORA_EXECUTOR_URL").pipe(
     Config.withDefault("https://executor.sh/labora/mcp"),
@@ -429,6 +429,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       agentDir,
       modelRuntime,
       model,
+      thinkingLevel: "high",
       settingsManager,
       resourceLoader: loader,
       customTools: tools,
@@ -585,6 +586,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       agentDir,
       modelRuntime,
       model,
+      thinkingLevel: "high",
       settingsManager,
       resourceLoader: nextLoader,
       customTools: tools,

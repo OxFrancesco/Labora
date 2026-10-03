@@ -2,6 +2,8 @@ import AppKit
 import Metal
 import SceneKit
 
+NSApplication.shared.setActivationPolicy(.prohibited)
+
 struct RenderRequest: Decodable {
     let id: Int
     let model: String

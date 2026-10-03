@@ -15,7 +15,7 @@ function printHelp() {
       "",
       "Each process owns one bot. Set LABORA_BOT_ID to choose it.",
       "Login waits for the browser callback. You can also paste the full callback URL into the terminal; input is hidden.",
-      "Chat requires this bot's ChatGPT subscription login. LABORA_OPENAI_MODEL defaults to gpt-5.5.",
+      "Chat requires this bot's ChatGPT subscription login. LABORA_OPENAI_MODEL defaults to gpt-6-astra.",
       "",
     ].join("\n"),
   );

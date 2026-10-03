@@ -127,8 +127,13 @@ try {
     await app.getByTestId("avatar3d-ready-pyramid-80").waitFor();
     checks.push("Rapid changes persist the latest selection, despite delayed acknowledgements");
     await driver.screenshot("04-latest-selection");
+    const { pid } = await app.call("initialize", { protocolVersion: 1, client: "labora-character-check" });
+    const activate = Bun.spawn(["/usr/bin/osascript", "-e", `tell application "System Events" to tell (first application process whose unix id is ${pid}) to set frontmost to true`]);
+    assert.equal(await activate.exited, 0);
+    await Bun.sleep(1100);
     const bounds = await app.getByTestId("avatar3d-view-pyramid-80").bounds();
     await app.mouse.move({ x: bounds.x + bounds.width * 0.2, y: bounds.y + bounds.height * 0.7 });
+    await Bun.sleep(350);
     const initial = await avatarPixels(await driver.screenshot("05-initial-pose"), bounds);
     await app.mouse.move({ x: bounds.x + bounds.width * 0.88, y: bounds.y + bounds.height * 0.25 });
     let changed = 0;
@@ -143,6 +148,23 @@ try {
       return changed > 1000;
     });
     checks.push(`The 3D character still responds to pointer movement (${changed} changed avatar pixels)`);
+
+    if (!source) {
+      const probe = Bun.spawn(["/usr/bin/swift", "-module-cache-path", "/private/tmp/labora-swift-cache", "-e", `
+import AppKit
+let directory = URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent().path + "/"
+let apps = NSWorkspace.shared.runningApplications.filter { $0.executableURL?.path.hasPrefix(directory) == true }
+let result = apps.map { ["executable": $0.executableURL!.lastPathComponent, "policy": $0.activationPolicy.rawValue] as [String: Any] }
+print(String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)
+`, driver.executable], { stdout: "pipe", stderr: "pipe" });
+
+      const [output, error, code] = await Promise.all([new Response(probe.stdout).text(), new Response(probe.stderr).text(), probe.exited]);
+      assert.equal(code, 0, error);
+      const applications: { executable: string; policy: number }[] = JSON.parse(output);
+      assert.equal(applications.filter(application => application.policy === 0).length, 1, "Only the main Labora app may appear in the Dock");
+      assert.ok(applications.some(application => application.executable === "labora-avatar" && application.policy === 2), "The active 3D renderer must stay hidden from the Dock");
+      checks.push("macOS registers one foreground Labora app; the running avatar helper uses prohibited activation policy");
+    }
   }
 
   assert.ok(pickerMs < 150, `Opening character images took ${pickerMs.toFixed(1)} ms`);

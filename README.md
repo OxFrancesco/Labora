@@ -52,7 +52,7 @@ On macOS, grant Screen Recording and Accessibility to **Labora Computer** from i
 
 ## Bots and integrations
 
-Create a bot on a connected computer, then open **Connect apps**. ChatGPT uses the new subscription sign-in flow. Executor uses the bot's own OAuth connection to `https://executor.sh/labora/mcp`. `LABORA_EXECUTOR_URL` changes the endpoint for another organization; `LABORA_OPENAI_MODEL` selects the model, defaulting to `gpt-5.5`.
+Create a bot on a connected computer, then open **Connect apps**. ChatGPT uses the new subscription sign-in flow. Executor uses the bot's own OAuth connection to `https://executor.sh/labora/mcp`. `LABORA_EXECUTOR_URL` changes the endpoint for another organization; `LABORA_OPENAI_MODEL` selects the model, defaulting to `gpt-6-astra` with high reasoning.
 
 The agent streams its messages and tool activity to the client. Characters show thinking, writing, tool use, questions, approval waiting, context compaction, retrying, completion, failure, cancellation, and reconnecting. Idle characters breathe and blink in Details. macOS Reduce Motion keeps distinct static poses, and background windows stop repeating animation frames. Background bot status does not start an idle Pi process.
 

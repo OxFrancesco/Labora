@@ -16,7 +16,7 @@ export async function createLaboraSession(paths: BotPaths, diagnostic = false) {
 
   const { modelRuntime } = await createLaboraModelRuntime(paths.agentDir);
 
-  const modelId = process.env.LABORA_OPENAI_MODEL ?? "gpt-5.5";
+  const modelId = process.env.LABORA_OPENAI_MODEL ?? "gpt-6-astra";
   const model = modelRuntime.getModel("openai", modelId);
 
   if (!model) throw new Error(`Unknown OpenAI model: ${modelId}. Check LABORA_OPENAI_MODEL.`);
@@ -85,6 +85,7 @@ export async function createLaboraSession(paths: BotPaths, diagnostic = false) {
     resourceLoader,
     modelRuntime,
     model,
+    thinkingLevel: "high",
     sessionManager: SessionManager.continueRecent(paths.workspace, paths.sessions),
   });
 
