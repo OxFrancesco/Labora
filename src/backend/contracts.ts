@@ -62,7 +62,7 @@ export interface SendMessage extends Schema.Schema.Type<typeof SendMessage> {}
 
 export const Message = Schema.Struct({
   id: Schema.String,
-  role: Schema.Literals(["user", "assistant", "tool"]),
+  role: Schema.Literals(["user", "assistant", "tool", "thinking"]),
   text: Schema.String,
   createdAt: Schema.String,
   toolName: Schema.optionalKey(Schema.String),

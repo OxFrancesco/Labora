@@ -285,6 +285,17 @@ try {
   assert.equal(await Bun.file(sentinel).text(), "outside-workspace-preserved");
   await complete(model, "The note is saved in **notes.md**. Workspace commands ran automatically.\n\nAccess to the file outside the workspace was blocked, including through the symlink.");
   await capture("01-pi-transcript");
+  const activityMessages = (await snapshot()).messages.filter((message) => message.role === "tool");
+  const firstActivity = activityMessages[0]!;
+  const firstCommand = activityMessages.find((message) => message.toolName === "bash")!;
+  await app.getByTestId(`activity-toggle-${firstActivity.id}`).click();
+  await app.getByTestId(`tool-${firstCommand.id}`).click();
+  await app.getByTestId(`detail-${firstCommand.id}`).waitFor();
+  await capture("01-expanded-command");
+  assert.ok((await app.call("getPaintedText", {})).text.join(" ").includes("Workspace ready"));
+  await app.getByTestId(`tool-${firstCommand.id}`).click();
+  await app.getByTestId(`activity-toggle-${firstActivity.id}`).click();
+  checks.push("Native activity group and command disclosures expand and collapse with readable output");
   checks.push("Real Pi write, edit and bash execute automatically; shell deletion and read/write symlink escapes are blocked by macOS; sentinel stays intact");
   await restart("history");
   const history = await snapshot();

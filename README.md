@@ -4,6 +4,14 @@ A native GPUix macOS client for personal Pi agents. Connect a computer over Tail
 
 The backend uses Effect 4.0.0 and Pi 1.0.0. The macOS interface uses GPUix 0.10.0 and React 19.3.0. The current anti-slop and Effect lint rules run during every desktop build.
 
+## Agent activity
+
+The native timeline ports T3 Code's compact work rows, grouped tool calls, thinking disclosures, question choices and composer task drawer to GPUix. Thinking summaries come from Pi's actual provider stream and session history. Commands and readable results expand on demand; protocol JSON stays out of the transcript.
+
+The travelling highlight uses T3's 72px mask and 2.2-second timing with GPUix native motion tracks. Disclosure arrows turn over 200ms. macOS Reduce Motion and app activation control animation. T3 Code's MIT notice ships in the application bundle. Reference components are `WorkLog`, `MessagesTimeline`, `ComposerTasksBadge`, and `ComposerPendingUserInputPanel` in the Codeview T3 source.
+
+`bun scripts/verify-live-activity.ts` runs an explicitly authorized verification in the selected, signed-in real chat. It requires an idle agent and an empty draft, records the installed app, asks the real model to use workspace tools and a question, answers Blue, and checks the resulting reply. It never invokes connected applications.
+
 ## Desktop development
 
 ```sh

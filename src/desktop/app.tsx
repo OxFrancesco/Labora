@@ -3,7 +3,8 @@ import { useGpuixRequired, useWindowSize } from "@gpuix/react";
 import { basename, join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { Avatar, Button, Icon, Label } from "./icons";
-import { ToolMessage } from "./tool-message";
+import { WorkRow } from "./tool-message";
+import { ConversationRows } from "./activity-timeline";
 import { toolTitle } from "../tool-presentation";
 import { color, font, terminalFont } from "./theme";
 import { ConnectComputer, ConnectionsDialog, CreateBotDialog } from "./dialogs";
@@ -333,53 +334,7 @@ export function App({ store }: AppProps) {
                 paddingBottom: 18,
               }}
             >
-              {labora.messages.map((message) => message.role === "assistant" && !message.text.trim() ? null : (
-                <div
-                  key={message.id}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-                    paddingTop: 10,
-                    paddingBottom: 6,
-                  }}
-                >
-                  {message.role === "tool" ? (
-                    <ToolMessage message={message} />
-                  ) : (
-                    <div
-                      style={{
-                        width: "100%",
-                        minWidth: 0,
-                        overflow: "hidden",
-                        paddingLeft: 13,
-                        paddingRight: 13,
-                        paddingTop: 8,
-                        paddingBottom: 8,
-                        backgroundColor: message.role === "user" ? "#263b45" : "transparent",
-                        borderRadius: 0,
-                      }}
-                    >
-                      <markdown
-                        source={message.text}
-                        theme={{ fontSans: terminalFont, fontMono: terminalFont, text: color.text, accent: "#b6a4db", metrics: { mdTextSize: 14, mdLineHeight: 23 } }}
-                        onLinkClick={(event) => {
-                          if (event.value?.startsWith("https://"))
-                            Bun.spawn(["/usr/bin/open", event.value]);
-                        }}
-                        style={{
-                          width: "100%",
-                          minWidth: 0,
-                          color: color.text,
-                          fontFamily: terminalFont,
-                          fontSize: 14,
-                          lineHeight: 23,
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
+              <ConversationRows messages={labora.messages} busy={labora.busy} />
               {!selected ? (
                 <div
                   style={{
@@ -405,16 +360,9 @@ export function App({ store }: AppProps) {
                   </Button>
                 </div>
               ) : null}
-              {labora.plan ? <AgentPlan plan={labora.plan} /> : null}
               {!["idle", "complete"].includes(labora.botActivity.phase) ? (
-                <div testId="bot-activity" role="status" aria-label={avatarActivityLabels[labora.botActivity.phase]} style={{ paddingTop: 12, paddingBottom: 12 }}>
-                  <Label secondary style={{ color: labora.botActivity.phase === "failed" ? color.error : color.secondary }}>
-                    {avatarActivityLabels[labora.botActivity.phase]}
-                  </Label>
-
-                </div>
+                <WorkRow id="bot-activity" label={avatarActivityLabels[labora.botActivity.phase]} icon="brain" active={["thinking", "retrying", "compacting"].includes(labora.botActivity.phase)} failed={labora.botActivity.phase === "failed"} />
               ) : null}
-              {labora.question ? <AgentQuestion key={labora.question.requestId} question={labora.question} answer={labora.answerQuestion} /> : null}
               {labora.approval ? (
                 <div
                   style={{
@@ -544,7 +492,9 @@ export function App({ store }: AppProps) {
                   </div>
                 </div>
               ) : null}
+              {labora.question ? <AgentQuestion key={labora.question.requestId} question={labora.question} answer={labora.answerQuestion} /> : null}
               <QueuedInputs items={labora.queuedInputs} />
+              {labora.plan ? <AgentPlan key={selected?.key} plan={labora.plan} /> : null}
               </div>
               {labora.busy ? <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
                 <Button id="input-mode-steer" label="Update task after the current step" active={inputMode === "steer"} onClick={() => setInputMode("steer")}><Label size={12}>After current step</Label></Button>

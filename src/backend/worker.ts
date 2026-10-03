@@ -107,6 +107,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
   let assistantId = "";
   let streamingAssistant: Message | undefined;
+  const streamingThoughts = new Map<number, Message>();
+  let thoughtEmittedAt = 0;
   const approvals = new Map<string, Approval>();
   const computerCalls = new Map<string, ComputerCall>();
   const progressTimes = new Map<string, number>();
@@ -477,6 +479,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     if (event.type === "message_start" && event.message.role === "assistant") {
       if (runId) emit(EventPayload.cases.RunActivity.make({ runId, phase: "thinking" }));
       assistantId = `assistant-${event.message.timestamp}`;
+      streamingThoughts.clear();
+      thoughtEmittedAt = 0;
       streamingAssistant = Message.make({
         id: assistantId,
         role: "assistant",
@@ -492,6 +496,28 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
     if (event.type === "message_update" && event.assistantMessageEvent.type === "thinking_start" && runId)
       emit(EventPayload.cases.RunActivity.make({ runId, phase: "thinking" }));
+
+    if (event.type === "message_update") {
+      const update = event.assistantMessageEvent;
+
+      if (update.type === "thinking_delta" || update.type === "thinking_end") {
+        const previous = streamingThoughts.get(update.contentIndex);
+
+        const thought = Message.make({
+          id: `${assistantId}-thinking-${update.contentIndex}`, role: "thinking",
+          text: update.type === "thinking_end" ? update.content : (previous?.text ?? "") + update.delta,
+          createdAt: streamingAssistant?.createdAt ?? new Date().toISOString(),
+          toolStatus: update.type === "thinking_end" ? "complete" : "running",
+        });
+
+        streamingThoughts.set(update.contentIndex, thought);
+
+        if (update.type === "thinking_end" || Date.now() - thoughtEmittedAt >= 100) {
+          thoughtEmittedAt = Date.now();
+          emit(EventPayload.cases.Message.make({ message: thought }));
+        }
+      }
+    }
 
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       const offset = streamingAssistant?.text.length ?? 0;
@@ -545,6 +571,9 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     }
 
     if (event.type === "message_end" && event.message.role === "assistant") {
+      for (const thought of streamingThoughts.values())
+        emit(EventPayload.cases.Message.make({ message: Message.make({ ...thought, toolStatus: "complete" }) }));
+      streamingThoughts.clear();
       messageFromAssistant();
       streamingAssistant = undefined;
     }
@@ -608,6 +637,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     activeConversationId = conversationId;
     assistantId = "";
     streamingAssistant = undefined;
+    streamingThoughts.clear();
     unsubscribe = bindSession();
   };
 
@@ -785,7 +815,14 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
             .join("")
         : message.content;
 
+      const thoughts = message.role === "assistant" ? message.content.flatMap((part, index) =>
+        part.type === "thinking" && part.thinking.trim() ? [Message.make({
+          id: `assistant-${message.timestamp}-thinking-${index}`, role: "thinking", text: part.thinking,
+          createdAt: new Date(message.timestamp).toISOString(), toolStatus: "complete",
+        })] : []) : [];
+
       return [
+        ...thoughts,
         Message.make({
           id: `${message.role}-${message.timestamp}`,
           role: message.role,
@@ -796,6 +833,12 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     });
 
     const partial = conversationId === activeConversationId ? streamingAssistant : undefined;
+
+    if (conversationId === activeConversationId) {
+      for (const thought of streamingThoughts.values()) {
+        if (!messages.some((message) => message.id === thought.id)) messages.push(thought);
+      }
+    }
 
     if (partial && !messages.some((message) => message.id === partial.id))
       messages.push(partial);

@@ -7,8 +7,8 @@ import type { MessageSnapshot } from "../backend/contracts";
 import type { LinkedBot } from "./use-labora";
 import { computerClient } from "./client";
 import { Button, Icon, Label } from "./icons";
-import { color, font, terminalFont } from "./theme";
-import { ToolMessage } from "./tool-message";
+import { color, font } from "./theme";
+import { ConversationRows } from "./activity-timeline";
 import { readableToolText, toolInput, toolTitle } from "../tool-presentation";
 import { AgentPlan, AgentQuestion } from "./agent-input";
 import { avatarActivityLabels } from "./avatar-motion";
@@ -85,10 +85,7 @@ function RoutineResults({ selected, routine, close }: { selected: LinkedBot; rou
     {error ? <Label size={12} style={{ color: color.error }}>{error}</Label> : null}
     <div style={{ display: "flex", flexDirection: "column", overflowY: "scroll", minHeight: 0, flexGrow: 1, gap: 14 }}>
       {snapshot && !snapshot.messages.length ? <Label secondary size={13}>No results yet</Label> : null}
-      {snapshot?.messages.map((message) => message.role === "assistant" && !message.text.trim() ? null : message.role === "tool" ? <ToolMessage key={message.id} message={message} /> : <div key={message.id} style={{ display: "flex", flexDirection: "column", flexShrink: 0, minWidth: 0, overflow: "hidden", gap: 4, padding: 10, backgroundColor: message.role === "user" ? "#263b45" : "transparent" }}>
-        <Label secondary size={11}>{`${message.role === "user" ? "Instruction" : selected.bot.name} · ${new Date(message.createdAt).toLocaleTimeString()}`}</Label>
-        <markdown source={message.text} theme={{ fontSans: terminalFont, fontMono: terminalFont, text: color.text, accent: "#b6a4db", metrics: { mdTextSize: 13, mdLineHeight: 20 } }} style={{ width: "100%", minWidth: 0 }} />
-      </div>)}
+      {snapshot ? <ConversationRows messages={snapshot.messages} busy={snapshot.busy} /> : null}
       {snapshot?.plan ? <AgentPlan plan={snapshot.plan} /> : null}
       {snapshot?.activity && snapshot.activity.phase !== "idle" ? <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <Label size={12} secondary>{avatarActivityLabels[snapshot.activity.phase]}</Label>

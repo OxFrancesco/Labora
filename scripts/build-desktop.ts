@@ -186,6 +186,7 @@ for (const [source, target] of [
   ["node_modules/@gpuix/native/LICENSE", "GPUix-LICENSE"],
   ["node_modules/react/LICENSE", "React-LICENSE"],
   ["assets/licenses/Pi-LICENSE", "Pi-LICENSE"],
+  ["assets/licenses/T3-Code-LICENSE", "T3-Code-LICENSE"],
   ["node_modules/effect/LICENSE", "Effect-LICENSE"],
 ] as const) {
   await copyFile(join(root, source), join(resources, "Licenses", target));
