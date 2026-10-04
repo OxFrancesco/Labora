@@ -8,7 +8,7 @@ export const ConversationId = Schema.String.check(
   Schema.isPattern(/^[a-z0-9][a-z0-9_-]{0,95}$/i),
 );
 
-export const Provider = Schema.String.check(Schema.isPattern(/^(openai|executor|notion|linear|github|granola|custom_[a-z0-9]{1,32})$/));
+export const Provider = Schema.String.check(Schema.isPattern(/^(openai|executor|notion|linear|github|granola|raindrop|custom_[a-z0-9]{1,32})$/));
 
 export type Provider = Schema.Schema.Type<typeof Provider>;
 

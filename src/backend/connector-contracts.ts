@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-export const ConnectorId = Schema.String.check(Schema.isPattern(/^(notion|linear|github|granola|custom_[a-z0-9]{1,32})$/));
+export const ConnectorId = Schema.String.check(Schema.isPattern(/^(notion|linear|github|granola|raindrop|custom_[a-z0-9]{1,32})$/));
 
 export const ConnectorAuth = Schema.Literals(["oauth", "none"]);
 
@@ -35,4 +35,5 @@ export const officialConnectors = [
   { id: "linear", name: "Linear", url: "https://mcp.linear.app/mcp", auth: "oauth", description: "Issues, projects, and team planning", docs: "https://linear.app/docs/mcp" },
   { id: "github", name: "GitHub", url: "https://api.githubcopilot.com/mcp/", auth: "oauth", description: "Repositories, issues, and pull requests", docs: "https://github.com/github/github-mcp-server" },
   { id: "granola", name: "Granola", url: "https://mcp.granola.ai/mcp", auth: "oauth", description: "Meeting notes and conversation search", docs: "https://www.granola.ai/blog/granola-mcp" },
+  { id: "raindrop", name: "Raindrop.io", url: "https://api.raindrop.io/rest/v2/ai/mcp", auth: "oauth", description: "Bookmarks and collections. Requires Raindrop Pro.", docs: "https://developer.raindrop.io/mcp/mcp" },
 ] satisfies Omit<Connector, "enabled" | "status" | "message">[];
