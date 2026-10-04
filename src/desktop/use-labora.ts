@@ -1,5 +1,5 @@
 import { toolInput } from "../tool-presentation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { basename, join } from "node:path";
 import { copyFile, mkdir } from "node:fs/promises";
 import { EventPayload, isConversationEvent } from "../backend/contracts";
@@ -54,9 +54,10 @@ interface AuthQuestion {
 
 export type DesktopStore = Awaited<ReturnType<typeof createDesktopStore>>;
 
-export function useLabora(store: DesktopStore) {
-  const [preferences, renderPreferences] = useState(store.preferences);
+export function useLabora(store: DesktopStore, preferredAgent?: string) {
+  const preferences = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const latestPreferences = useRef(preferences);
+  latestPreferences.current = preferences;
   const [bots, setBots] = useState<LinkedBot[]>([]);
   const [messages, setMessages] = useState<readonly Message[]>([]);
   const [error, setError] = useState("");
@@ -72,7 +73,7 @@ export function useLabora(store: DesktopStore) {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [authLink, setAuthLink] = useState("");
   const [authQuestion, setAuthQuestion] = useState<AuthQuestion | null>(null);
-  const selected = bots.find((item) => item.key === preferences.selected) ?? bots[0];
+  const selected = preferredAgent === undefined ? bots.find((item) => item.key === preferences.selected) ?? bots[0] : bots.find((item) => item.key === preferredAgent);
   const key = selected?.key ?? "new";
   const draft = preferences.drafts.find((item) => item.key === key) ?? { key, text: "", paths: [] };
   const currentSelection = useRef(selected);
@@ -97,9 +98,8 @@ export function useLabora(store: DesktopStore) {
   const reportError = useCallback((reason: Error) => setError(reason.message), []);
 
   const setPreferences = useCallback((update: (current: Preferences) => Preferences) => {
-    const next = update(latestPreferences.current);
+    const next = update(store.getSnapshot());
     latestPreferences.current = next;
-    renderPreferences(next);
     const saved = store.save(next);
     void saved.catch(reportError);
 

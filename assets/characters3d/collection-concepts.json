@@ -1,0 +1,174 @@
+{
+  "mode": "built-in image_gen",
+  "common": "Use case: stylized-concept. Create one polished concept sheet for an original Labora desktop pet. Landscape 3:2 composition, warm pale ivory seamless background. High-end tactile 3D toy / stop-motion maquette rendering with broad soft studio light, subtle contact shadows, beautifully simple readable silhouette. Design for a small desktop companion: chunky compact forms, minimal dark eyes, personality expressed through shape, eye direction and physical pose. Adult-friendly warmth and oddness. No generic humanoid robot, no corporate mascot suit, no computers, no props, no brand logos, no scenery, no watermark. The pet occupies most of the space. Layout: one large three-quarter hero view in the left two thirds; two smaller views of THE EXACT SAME character on the right, one thinking pose and one delighted completion pose. Preserve character identity and materials across all three. Small clean dark-gray sans-serif caption along bottom only, with exact concept number, name, and personality supplied below. Small right pose labels \"Thinking\" and \"Done\". No other text. Clear breathing room and consistent scale. This is exploratory concept art, not a screenshot of the application.",
+  "concepts": [
+    {
+      "id": "01",
+      "name": "Scout",
+      "personality": "The curious one",
+      "subject": "A plump asymmetric five-point yellow clay star, evolving the Labora star identity. One upper point cocks sideways like an inquisitive ear. Tiny close-set espresso oval eyes, one slightly raised eyelid, leaning forward, small eager bounce. No mouth needed. A quiet little explorer.",
+      "behavior": "Leans toward new messages; a point perks up when it finds something."
+    },
+    {
+      "id": "02",
+      "name": "Dozer",
+      "personality": "The unhurried one",
+      "subject": "An oatmeal felt pebble creature, a low soft rounded bean with two sleepy half-moon embroidered eyes and a tiny folded corner like a blanket. Lopsided weight and a subtle knowing smile. Tactile wool, never generic teddy bear.",
+      "behavior": "Slow blinks while waiting; wakes with a tiny stretch."
+    },
+    {
+      "id": "03",
+      "name": "Pip",
+      "personality": "The patient grower",
+      "subject": "A tiny pistachio-green clay seed creature with a round-bottomed seed body and a single broad sprout leaf forming a expressive hair tuft. Two brown dot eyes, leaf leaning toward the viewer, two very small root feet. Quietly optimistic.",
+      "behavior": "Its leaf rises as work progresses and curls when resting."
+    },
+    {
+      "id": "04",
+      "name": "Mochi",
+      "personality": "The affectionate one",
+      "subject": "A squishy pale lilac rice-cake blob with a flattened lower edge and two tiny mitten-like side nubs, tiny dark oval eyes and softly pink cheeks. It enthusiastically squashes into a delighted oblong, personality through compression, tactile matte silicone.",
+      "behavior": "Squashes hello and does one small hop when finished."
+    },
+    {
+      "id": "05",
+      "name": "Nib",
+      "personality": "The thoughtful writer",
+      "subject": "A midnight-blue satin ceramic ink-drop creature. Its droplet tip curls forward like a thoughtful forelock; two almond-shaped silver-gray eyes and one tiny curious eyebrow. Base rounds into a soft bean, tiny sculpted tail, absolutely no pen accessory.",
+      "behavior": "The droplet tip draws a small loop while thinking."
+    },
+    {
+      "id": "06",
+      "name": "Crumb",
+      "personality": "The eager imperfect one",
+      "subject": "A warm terracotta clay creature shaped like an irregular little biscuit nugget with a charming single chipped corner, subtle baked-speckle texture, two mismatched dark dot eyes and one tiny protruding clay foot. A hopeful forward tilt, no food packaging.",
+      "behavior": "Almost tips over when excited, then catches itself."
+    },
+    {
+      "id": "07",
+      "name": "Moss",
+      "personality": "The quiet caretaker",
+      "subject": "A compact moss-green fuzzy mound with softly rounded triangular silhouette, plush boucle fiber clumps, two small dark eyes tucked under a soft moss fringe, very short feet barely visible. Shy sideways lean. No plant pot.",
+      "behavior": "Peeks out when called; settles into a content little mound."
+    },
+    {
+      "id": "08",
+      "name": "Pocket",
+      "personality": "The helpful organizer",
+      "subject": "A soft dusty-coral folded-felt creature shaped like a rounded envelope pouch with a single overlapping diagonal flap forming a forehead. Two small stitched navy eyes sit below flap, stubby felt feet. One corner stands proud like a confident ear. No letters, logos or bag straps.",
+      "behavior": "Tucks completed tasks under its flap, then pats them flat."
+    },
+    {
+      "id": "09",
+      "name": "Tumble",
+      "personality": "The playful problem solver",
+      "subject": "A butter-yellow chunky rounded cube made of handworked clay, slightly dented corners, two tiny black oval eyes low on one face. Perched diagonally on one rounded corner in a mischievous balancing pose. More living geometric toy than robot.",
+      "behavior": "Rolls onto another face to consider a different approach."
+    },
+    {
+      "id": "10",
+      "name": "Peb",
+      "personality": "The steady companion",
+      "subject": "A smooth slate-blue river-stone creature shaped as an upright lopsided pebble, dry mineral surface and one narrow natural ivory seam. Two tiny dark inset eyes and minimal raised brow, grounded stance, reassuring quiet expression.",
+      "behavior": "Gives one deliberate nod when it understands."
+    },
+    {
+      "id": "11",
+      "name": "Flick",
+      "personality": "The restless idea maker",
+      "subject": "A compact amber-orange soft wax flame-shaped creature, rounded bulbous lower body and three rounded upward wisps, central wisp bending sideways. Small dark eyes with energetic raised brow. Matte warm wax, no actual dangerous fire or sharp edges.",
+      "behavior": "Its soft flame tips flick in different directions while brainstorming."
+    },
+    {
+      "id": "12",
+      "name": "Loop",
+      "personality": "The patient explainer",
+      "subject": "A peach knitted wool loop creature shaped like a soft asymmetric upright lowercase arch with a visible small off-center hole, two dark button-sized embroidered eyes on upper arch, two soft stubby ends as feet. One end steps forward, friendly attentiveness. No lettering.",
+      "behavior": "Tilts its loop toward you, then slowly straightens when an idea clicks."
+    },
+    {
+      "id": "13",
+      "name": "Jelly",
+      "personality": "The easily impressed one",
+      "subject": "A pale aqua frosted-translucent jelly creature with rounded bell silhouette and three short rounded jelly feet. Two charcoal oval eyes suspended just under the frosted surface, a tiny open o of surprise. Restrained subsurface scattering, no bioluminescent neon.",
+      "behavior": "A ripple passes through its body when it discovers something."
+    },
+    {
+      "id": "14",
+      "name": "Orbit",
+      "personality": "The distracted stargazer",
+      "subject": "A matte periwinkle spherical creature with a thick soft peach crescent ring hugging it diagonally, ring asymmetry creates a floating ear-like flourish. Tiny dark oval eyes stare slightly up and to the side, one tiny dimple. Toy-like quiet cosmic oddball, no space backdrop.",
+      "behavior": "Its ring slowly tilts while thinking, then snaps gently into place."
+    },
+    {
+      "id": "15",
+      "name": "Echo",
+      "personality": "The attentive listener",
+      "subject": "A small dusty-blue clay bean creature with two oversized soft cupped fins on its head, shaped like smooth rabbit-ear folds but unmistakably abstract, low paired dot eyes, attentive side tilt. Ears overlap slightly, one taller than the other.",
+      "behavior": "Its ear fins turn toward whoever is speaking."
+    },
+    {
+      "id": "16",
+      "name": "Wisp",
+      "personality": "The shy night owl",
+      "subject": "A warm-white matte porcelain ghost-like droplet creature with an asymmetrical draped scalloped base, tiny charcoal eyes set far apart, one draped side lifts slightly in a tentative wave. Solid porcelain, gentle innocent expression, no horror.",
+      "behavior": "Appears with a tentative wave and folds down to rest."
+    },
+    {
+      "id": "17",
+      "name": "Knob",
+      "personality": "The stubborn perfectionist",
+      "subject": "A chunky mustard-yellow soft rubber rounded triangular prism creature, two tiny dark eyes under a determined brow, one little offset knob protrusion on its crown. Feet planted apart, proud but endearing. No screen, no wires, no mechanical face.",
+      "behavior": "Squares itself up, checks twice, then gives a proud little nod."
+    },
+    {
+      "id": "18",
+      "name": "Sprig",
+      "personality": "The cheerful tinkerer",
+      "subject": "A cheerful small coral-pink rounded clay creature shaped like a branching Y with three thick rounded arms, two dark eyes on central trunk and short split feet. One branch curls inward like a hand on hip. Cheerful asymmetric stance, toy sculpture simplicity.",
+      "behavior": "Uses its three rounded branches to count through ideas."
+    },
+    {
+      "id": "19",
+      "name": "Puff",
+      "personality": "The comforting daydreamer",
+      "subject": "A compact pale sky-blue brushed cotton cloud creature with just three large soft lobes, a flatter lower base, sleepy kind dot eyes and two minuscule gray felt feet, slight rosy tint on cheeks. Real soft textile fibers, not emoji cloud.",
+      "behavior": "Lets out a tiny puff-shaped sigh after a long task."
+    },
+    {
+      "id": "20",
+      "name": "Rook",
+      "personality": "The resourceful little builder",
+      "subject": "A tiny charcoal-black soft clay creature with a stout rounded rook-like tower silhouette, crown split into two large blunt prongs like expressive brows, warm ivory inset oval eyes, wide settled bottom. Abstract friendly sculpture, no chessboard or armor.",
+      "behavior": "Stacks its posture taller when it has a plan."
+    },
+    {
+      "id": "21",
+      "name": "Marble",
+      "personality": "The meticulous collector",
+      "subject": "A small opaline glass orb creature, milky cream with one restrained pale pink internal swirl, two dark bead-like inset eyes and two very small stub feet made of matte cream ceramic. Leaned sideways as if examining a detail. Frosted not mirror-shiny.",
+      "behavior": "Rotates a few degrees to inspect a detail before answering."
+    },
+    {
+      "id": "22",
+      "name": "Noodle",
+      "personality": "The flexible improviser",
+      "subject": "A single thick soft tangerine clay cord bent into a compact asymmetric pretzel-like creature with one open loop and two rounded ends as feet. Small paired dark eyes on the front-facing bend, jaunty pose. Clear simple readable silhouette, not a detailed knot.",
+      "behavior": "Unties and reforms its pose when the plan changes."
+    },
+    {
+      "id": "23",
+      "name": "Patch",
+      "personality": "The earnest apprentice",
+      "subject": "A plump pale sage felt diamond-shaped creature with rounded corners, one contrasting oatmeal patch on its lower side and visible sparse hand stitches. Small dark embroidered eyes at slightly different heights, tiny hopeful felt nubs for feet. Lovable handmade imperfection.",
+      "behavior": "Learns with an eager lean; celebrates with a clumsy wiggle."
+    },
+    {
+      "id": "24",
+      "name": "Dimple",
+      "personality": "The mischievous minimalist",
+      "subject": "A soft raspberry clay rounded cushion creature with an asymmetric central dent and two tiny dark oval eyes just above that dent. One corner curls upward into a cheeky smirk without drawing a mouth. Barely-there little feet and an exaggerated side-eye.",
+      "behavior": "Side-eyes a messy task, then gets on with it."
+    }
+  ]
+}

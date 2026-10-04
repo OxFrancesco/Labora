@@ -1,0 +1,146 @@
+[
+  {
+    "name": "scout",
+    "meshes": 4,
+    "triangles": 18540,
+    "bytes": 880315
+  },
+  {
+    "name": "dozer",
+    "meshes": 12,
+    "triangles": 46058,
+    "bytes": 2454544
+  },
+  {
+    "name": "pip",
+    "meshes": 8,
+    "triangles": 38516,
+    "bytes": 2054701
+  },
+  {
+    "name": "mochi",
+    "meshes": 7,
+    "triangles": 24118,
+    "bytes": 1086763
+  },
+  {
+    "name": "nib",
+    "meshes": 9,
+    "triangles": 26140,
+    "bytes": 1325238
+  },
+  {
+    "name": "crumb",
+    "meshes": 97,
+    "triangles": 35096,
+    "bytes": 1357474
+  },
+  {
+    "name": "moss",
+    "meshes": 11,
+    "triangles": 181444,
+    "bytes": 10291629
+  },
+  {
+    "name": "pocket",
+    "meshes": 10,
+    "triangles": 44752,
+    "bytes": 2564397
+  },
+  {
+    "name": "tumble",
+    "meshes": 3,
+    "triangles": 3628,
+    "bytes": 242192
+  },
+  {
+    "name": "peb",
+    "meshes": 8,
+    "triangles": 30260,
+    "bytes": 1366438
+  },
+  {
+    "name": "flick",
+    "meshes": 8,
+    "triangles": 22580,
+    "bytes": 1157681
+  },
+  {
+    "name": "loop",
+    "meshes": 6,
+    "triangles": 39379,
+    "bytes": 1977864
+  },
+  {
+    "name": "jelly",
+    "meshes": 6,
+    "triangles": 15280,
+    "bytes": 505557
+  },
+  {
+    "name": "orbit",
+    "meshes": 9,
+    "triangles": 14580,
+    "bytes": 769144
+  },
+  {
+    "name": "echo",
+    "meshes": 7,
+    "triangles": 29016,
+    "bytes": 1264254
+  },
+  {
+    "name": "wisp",
+    "meshes": 4,
+    "triangles": 12240,
+    "bytes": 518069
+  },
+  {
+    "name": "knob",
+    "meshes": 8,
+    "triangles": 22668,
+    "bytes": 948104
+  },
+  {
+    "name": "sprig",
+    "meshes": 4,
+    "triangles": 19740,
+    "bytes": 1120265
+  },
+  {
+    "name": "puff",
+    "meshes": 8,
+    "triangles": 45708,
+    "bytes": 3214021
+  },
+  {
+    "name": "rook",
+    "meshes": 7,
+    "triangles": 24120,
+    "bytes": 1272152
+  },
+  {
+    "name": "marble",
+    "meshes": 6,
+    "triangles": 21588,
+    "bytes": 855209
+  },
+  {
+    "name": "noodle",
+    "meshes": 5,
+    "triangles": 9940,
+    "bytes": 411745
+  },
+  {
+    "name": "patch",
+    "meshes": 19,
+    "triangles": 38406,
+    "bytes": 2470856
+  },
+  {
+    "name": "dimple",
+    "meshes": 9,
+    "triangles": 27158,
+    "bytes": 1168553
+  }
+]

@@ -31,3 +31,15 @@ Use `--only star` to rebuild one character, `--contact-sheet` to refresh the col
 The official exporter reference was obtained with `codeview` at `resources/gltf-blender-io`. The running exporter comes from Blender's bundled `io_scene_gltf2` version 5.2.39. All geometry and material recipes are in `scripts/blender-characters.py`.
 
 The native app also bundles a 160 x 160 RGBA preview per character. `bun scripts/build-character-previews.ts` renders these from the USDZ models with the same SceneKit lighting and neutral pose used by the app. The picker and the first visible avatar frame use these local previews immediately; the large avatar then renders its interactive 3D animation. Desktop builds regenerate and validate the previews.
+
+## Expanded collection
+
+The native gallery includes 24 additional Blender pets, Scout through Dimple. Their editable sources are versioned in `sources/`. Generated GLB exports and render deliverables remain in `output/blender/labora-pets-20261004/`. These pets have their own faces and silhouettes; the eyes-only specification above applies to the original six.
+
+`bun scripts/build-character-previews.ts` generates 160-pixel avatar previews and 320-pixel gallery previews for all 30 characters. Gallery tiles use static previews; the selected large preview uses the interactive SceneKit model. The package includes the additional USDZ models and both preview sizes, without duplicating the editable source collection.
+
+To regenerate the editable collection, run `scripts/blender-pet-collection.py` in Blender and copy the resulting individual `.blend` files from `output/blender/labora-pets-20261004/` into `sources/`. The generation prompts are versioned in `collection-concepts.json`; local concept images are optional editing references.
+
+Export the new runtime models with `blender --background --python scripts/export-pet-runtime.py`. The exporter selects the neutral frame, omits hidden smiling-eye geometry, reduces dense mesh detail, and exports Y-up USDZ without stage lights or cameras. It never modifies the editable Blender sources. Mesh counts and export sizes are recorded in `collection-runtime.json`.
+
+`bun scripts/verify-character-gallery.ts` exercises the native + window, all 24 saves, failure/retry, minimum window size, Escape, and reopening. Set `LABORA_GALLERY_EXECUTABLE` to test a packaged gallery executable. Screenshots and a walkthrough are saved in `evidence/character-gallery/`.

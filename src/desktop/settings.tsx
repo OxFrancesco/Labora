@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, useGpuix, useWindowSize } from "@gpuix/react";
 import type { PublicInstance } from "@gpuix/react";
@@ -6,12 +6,15 @@ import type { Connection, Preferences } from "./store";
 import type { Labora } from "./use-labora";
 import { Button, Icon, Label } from "./icons";
 import { color } from "./theme";
+import type { BubbleControls } from "./use-bubble";
+import { defaultShortcut, shortcutLabel } from "./shortcut";
 
 interface SettingsProps {
   labora: Labora;
   close: () => void;
   connectComputer: () => void;
   connectApps: () => void;
+  bubble: BubbleControls;
 }
 
 const voiceLanguages = [
@@ -65,16 +68,53 @@ function authLabel(labora: Labora, provider: "openai" | "executor") {
   return labora.auth[provider] === "ready" ? "Connected" : "Not connected";
 }
 
-interface GeneralProps extends Pick<SettingsProps, "labora" | "connectApps"> {
+interface GeneralProps extends Pick<SettingsProps, "labora" | "connectApps" | "bubble"> {
   languageMenuOpen: boolean;
   setLanguageMenuOpen: (open: boolean) => void;
 }
 
-function General({ labora, connectApps, languageMenuOpen, setLanguageMenuOpen }: GeneralProps) {
+function General({ labora, connectApps, bubble, languageMenuOpen, setLanguageMenuOpen }: GeneralProps) {
   const language = voiceLanguages.find((item) => item.locale === (labora.preferences.voiceLocale ?? "")) ?? voiceLanguages[0];
+  const { renderer } = useGpuix();
+  const recorder = useRef<PublicInstance | null>(null);
+  const [shortcutError, setShortcutError] = useState("");
+  const defaultAgent = labora.bots.find((item) => item.key === labora.preferences.defaultAgent);
+  useEffect(() => () => bubble.setRecording(false), [bubble.setRecording]);
 
   return (
     <>
+      <Card>
+        <Row label="Default agent">
+          <Select value={labora.preferences.defaultAgent ?? ""} items={labora.bots.map((item) => ({ value: item.key, label: item.bot.name }))} onValueChange={(value) => labora.updatePreferences({ defaultAgent: value })}>
+            <SelectTrigger testId="settings-default-agent" aria-label="Default agent" aria-valuetext={defaultAgent?.bot.name ?? "Choose agent"} style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: 8, width: 200, minWidth: 0, maxWidth: "55%", borderRadius: 7, cursor: "pointer", hover: { backgroundColor: "#292929" } }}><Label secondary style={{ flexGrow: 1, minWidth: 0, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{defaultAgent?.bot.name ?? "Choose agent"}</Label><svg source='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="m3 4.5 3 3 3-3"/></svg>' style={{ width: 12, height: 12, flexShrink: 0, color: color.secondary }} /></SelectTrigger>
+            <SelectContent role="listbox" aria-label="Available agents" side="bottom" align="end" sideOffset={6} style={{ width: 248, maxHeight: 240, overflowY: "scroll", padding: 5, borderRadius: 9, borderWidth: 1, borderColor: "#383838", backgroundColor: "#222222", display: "flex", flexDirection: "column" }}>
+              {labora.bots.map((item) => <SelectItem key={item.key} value={item.key} testId={`default-agent-${item.bot.id}`} aria-label={`${item.bot.name} on ${item.connection.computer.name}`} style={(state) => ({ padding: 10, borderRadius: 5, backgroundColor: state.highlighted ? "#3c3c3c" : "transparent", cursor: "pointer" })}><Label size={13}>{item.bot.name}</Label></SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Row>
+        <Row label="Show agent bubble">
+          <div ref={recorder} role="button" tabIndex={0} testId="settings-bubble-shortcut" aria-label="Change bubble shortcut" onClick={() => { setShortcutError(""); bubble.setRecording(true);
+
+ if (recorder.current) renderer?.focusElement?.(recorder.current.id); }} onKeyDown={(event) => {
+            if (!bubble.recording) { if (event.key === "enter" || event.key === "space") bubble.setRecording(true);
+
+ return; }
+
+            if (event.key === "escape") { bubble.setRecording(false);
+
+ return; }
+
+            if (event.isHeld || ["shift", "control", "alt", "meta", "cmd", "ctrl", "fn"].includes(event.key ?? "")) return;
+            const modifiers = event.modifiers;
+            void bubble.changeShortcut({ key: event.key === " " ? "space" : (event.key ?? "").toLowerCase(), cmd: !!modifiers?.cmd, shift: !!modifiers?.shift, alt: !!modifiers?.alt, ctrl: !!modifiers?.ctrl }).catch((reason: Error) => setShortcutError(reason.message));
+          }} style={{ padding: 8, minWidth: 108, borderRadius: 7, backgroundColor: bubble.recording ? "#383838" : "#242424", cursor: "pointer" }}><Label size={13}>{bubble.recording ? "Press shortcut…" : shortcutLabel(bubble.shortcut)}</Label></div>
+        </Row>
+        {shortcutError || bubble.error ? <div style={{ padding: 14, paddingTop: 0 }}><Label size={12} style={{ color: color.error }}>{shortcutError || bubble.error}</Label></div> : null}
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, paddingTop: 0, gap: 4 }}>
+          {bubble.recording ? <Button id="shortcut-cancel" label="Cancel shortcut recording" onClick={() => bubble.setRecording(false)}><Label size={12}>Cancel</Label></Button> : <Button id="bubble-preview" label="Open agent bubble" onClick={bubble.toggle}><Label size={12}>Open bubble</Label></Button>}
+          <Button id="shortcut-reset" label="Reset bubble shortcut" onClick={() => { void bubble.changeShortcut(defaultShortcut).catch((reason: Error) => setShortcutError(reason.message)); }}><Label secondary size={12}>Reset shortcut</Label></Button>
+        </div>
+      </Card>
       <Card>
         {labora.selected ? (
           <>
@@ -192,7 +232,7 @@ function Computers({ labora, connectComputer }: Pick<SettingsProps, "labora" | "
   );
 }
 
-export function Settings({ labora, close, connectComputer, connectApps }: SettingsProps) {
+export function Settings({ labora, close, connectComputer, connectApps, bubble }: SettingsProps) {
   const [section, setSection] = useState<"General" | "Computer">("General");
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const window = useWindowSize();
@@ -223,7 +263,7 @@ export function Settings({ labora, close, connectComputer, connectApps }: Settin
           role="dialog"
           aria-label="Labora settings"
           testId="settings-dialog"
-          onKeyDown={(event) => { if (event.key === "escape" && !languageMenuOpen) close(); }}
+          onKeyDown={(event) => { if (event.key === "escape" && !languageMenuOpen && !bubble.recording) close(); }}
           style={{ width, height: Math.min(665, window.height - 56), borderRadius: 18, borderWidth: 1, borderColor: "#2b2b2b", backgroundColor: color.canvas, overflow: "hidden", display: "flex", flexDirection: "row" }}
         >
           <div role="navigation" aria-label="Settings sections" style={{ width: width < 820 ? 170 : 200, flexShrink: 0, padding: 16, paddingTop: 60, display: "flex", flexDirection: "column", gap: 5, borderRightWidth: 1, borderColor: "#202020" }}>
@@ -240,7 +280,7 @@ export function Settings({ labora, close, connectComputer, connectApps }: Settin
               <Button id="sheet-close" label="Close settings" icon="close" onClick={close} />
             </div>
             <div style={{ flexGrow: 1, minHeight: 0, padding: 24, paddingTop: 0, overflowY: "scroll", display: "flex", flexDirection: "column", gap: 14 }}>
-              {section === "General" ? <General labora={labora} connectApps={connectApps} languageMenuOpen={languageMenuOpen} setLanguageMenuOpen={setLanguageMenuOpen} /> : <Computers labora={labora} connectComputer={connectComputer} />}
+              {section === "General" ? <General labora={labora} connectApps={connectApps} bubble={bubble} languageMenuOpen={languageMenuOpen} setLanguageMenuOpen={setLanguageMenuOpen} /> : <Computers labora={labora} connectComputer={connectComputer} />}
             </div>
           </div>
         </div>

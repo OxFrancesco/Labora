@@ -31,7 +31,9 @@ The bundle includes Bun, GPUix, Pi's workers and assets, the clipboard helper, a
 
 The native app stores its private connection credentials and drafts under `~/Library/Application Support/Labora`. Set `LABORA_DESKTOP_DATA_DIR` to use another profile.
 
-Each bot can use one of six Blender characters: Spark, Cube, Pyramid, Star, Hexagon, or Pebble. Select a character when creating a bot or click its avatar in Details. The app renders the USDZ geometry through SceneKit and Metal, with pointer-driven rotation in Details. Editable Blender sources, GLB/USDZ exports, and validation records are in [assets/characters3d](assets/characters3d/README.md). The image-generation concepts remain in [assets/characters](assets/characters/README.md) as references only.
+Each bot can use one of 30 Blender characters. Click its avatar in Details for the original six, then + to open the larger character window with all 24 new designs. Preview a pet and choose Use to save it. The same picker is available when creating a bot. The app renders the USDZ geometry through SceneKit and Metal, with pointer-driven rotation in Details. Editable Blender sources, GLB/USDZ exports, and validation records are in [assets/characters3d](assets/characters3d/README.md). The image-generation concepts remain in [assets/characters](assets/characters/README.md) as references only.
+
+Press Command-Shift-Space to show or hide your default agent in a floating bubble. Choose the default agent and change the shortcut in Settings. The bubble shares the agent conversation and draft with the main window.
 
 ## Connect a personal computer
 

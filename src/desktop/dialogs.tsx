@@ -200,7 +200,7 @@ export function ConnectComputer({ labora, close }: DialogProps) {
 export function CreateBotDialog({ labora, close }: DialogProps) {
   const [name, setName] = useState("New Bot");
   const [connectionId, setConnectionId] = useState(labora.preferences.connections[0]?.id ?? "");
-  const [tint, setTint] = useState(botColors[labora.bots.length % botColors.length] ?? "#8450e5");
+  const [tint, setTint] = useState<string>(botColors[labora.bots.length % botColors.length] ?? "#8450e5");
   const [error, setError] = useState("");
 
   async function create() {

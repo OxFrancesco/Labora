@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import manifest from "../package.json";
+import { allCharacters } from "../src/desktop/avatars";
 
 const root = resolve(import.meta.dir, "..");
 
@@ -34,6 +35,8 @@ await run([process.execPath, "scripts/prepare-github-mcp.ts"]);
 await run([process.execPath, "scripts/computer-build-macos.ts"]);
 
 await run([process.execPath, "scripts/build-desktop-helper.ts"]);
+
+await run([process.execPath, "scripts/build-bubble-helper.ts"]);
 
 await run([process.execPath, "scripts/build-avatar-renderer.ts"]);
 
@@ -102,6 +105,9 @@ if (process.argv.includes("--computer")) {
 } else {
   process.env.NAPI_RS_NATIVE_LIBRARY_PATH = join(macos, "gpuix-native.node");
   if (process.argv.includes("--check-runtime")) {
+    for (const file of ${JSON.stringify(allCharacters.flatMap((character) => ["usdz", "rgba", "gallery.rgba"].map((extension) => character.file.replace(/\.usdz$/, `.${extension}`))))}) {
+      if (!existsSync(join(resources, "characters3d", file))) throw new Error("Missing character: " + file);
+    }
     const native = await import("@gpuix/native");
     if (!native.GpuixRenderer) throw new Error("GPUix native renderer could not load");
     for (const path of ["pi/package.json", "pi/docs", "pi/theme", "Licenses/GPUix-LICENSE"]) {
@@ -148,6 +154,8 @@ await copyFile(join(root, "node_modules/@gpuix/native-darwin-arm64/gpuix-native.
 
 await copyFile(join(dist, "labora-desktop"), join(macos, "labora-desktop"));
 
+await copyFile(join(dist, "liblabora-bubble.dylib"), join(macos, "liblabora-bubble.dylib"));
+
 await copyFile(join(dist, "labora-avatar"), join(macos, "labora-avatar"));
 
 await copyFile(join(dist, "labora-voice"), join(macos, "labora-voice"));
@@ -163,6 +171,13 @@ await mkdir(join(resources, "characters3d"), { recursive: true });
 for (const name of ["spark", "cube", "pyramid", "star", "hexagon", "pebble"]) {
   for (const extension of ["usdz", "glb", "blend", "rgba"]) {
     const file = `${name}.${extension}`;
+    await copyFile(join(root, "assets/characters3d", file), join(resources, "characters3d", file));
+  }
+}
+
+for (const character of allCharacters) {
+  for (const extension of ["usdz", "rgba", "gallery.rgba"]) {
+    const file = character.file.replace(/\.usdz$/, `.${extension}`);
     await copyFile(join(root, "assets/characters3d", file), join(resources, "characters3d", file));
   }
 }
@@ -252,6 +267,8 @@ await sign(nativeLibrary);
 await sign(join(macos, "github-mcp-server"));
 
 await sign(join(macos, "labora-desktop"));
+
+await sign(join(macos, "liblabora-bubble.dylib"));
 
 await sign(join(macos, "labora-avatar"));
 

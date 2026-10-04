@@ -42,10 +42,7 @@ export function BotProfile({ labora }: { labora: Labora }) {
         <CharacterPicker
           value={bot.color}
           idPrefix="edit-color"
-          onChange={(value) => {
-            setEditing("none");
-            labora.attempt(labora.updateBot({ color: value }));
-          }}
+          onChange={(value) => labora.updateBot({ color: value })}
         />
       ) : null}
       {editing === "name" ? (

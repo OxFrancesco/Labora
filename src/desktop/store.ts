@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Config, Effect, Schema } from "effect";
 import { Computer } from "../computer/contracts";
+import { Shortcut } from "./shortcut";
 
 export const Connection = Schema.Struct({
   id: Schema.String,
@@ -31,6 +32,8 @@ const Preferences = Schema.Struct({
   detailsWidth: Schema.Number,
   drafts: Schema.Array(Draft),
   voiceLocale: Schema.optionalKey(Schema.Literals(["", "en-GB", "en-US", "it-IT"])),
+  defaultAgent: Schema.optionalKey(Schema.String),
+  bubbleShortcut: Schema.optionalKey(Shortcut),
 });
 
 export interface Preferences extends Schema.Schema.Type<typeof Preferences> {}
@@ -62,9 +65,12 @@ export async function createDesktopStore() {
   let pending = Promise.resolve();
   let latest = preferences;
   let written = preferences;
+  const listeners = new Set<() => void>();
 
   function save(value: Preferences) {
     latest = value;
+
+    for (const listener of listeners) listener();
 
     const write = async () => {
       if (latest === written) return;
@@ -100,5 +106,7 @@ export async function createDesktopStore() {
     }
   }
 
-  return { preferences, save, flush, directory };
+  return { preferences, save, flush, directory, getSnapshot: () => latest, subscribe(listener: () => void) { listeners.add(listener);
+
+ return () => { listeners.delete(listener); }; } };
 }

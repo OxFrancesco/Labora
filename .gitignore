@@ -17,3 +17,6 @@ verification/reference/
 cloud/wrangler.local.jsonc
 **/.dev.vars
 **/.dev.vars.*
+
+# Generated renders, delivery archives, and private reports
+output/

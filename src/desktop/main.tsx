@@ -8,6 +8,11 @@ installNativeCaptureCleanup();
 
 process.once("exit", closeAvatarRenderer);
 
+if (process.argv.includes("--characters")) {
+  await import("./character-window");
+} else if (process.argv.includes("--bubble")) {
+  await import("./bubble-main");
+} else {
 const store = await createDesktopStore();
 
 process.once("exit", () => store.flush());
@@ -25,3 +30,4 @@ render(<App store={store} />, {
   windowBackground: "opaque",
   resizable: true,
 });
+}

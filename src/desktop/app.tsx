@@ -6,7 +6,7 @@ import { Avatar, Button, Icon, Label } from "./icons";
 import { WorkRow } from "./tool-message";
 import { ConversationRows } from "./activity-timeline";
 import { toolTitle } from "../tool-presentation";
-import { color, font, terminalFont } from "./theme";
+import { composerTextStyle, composerButtonStyle, color, font, terminalFont } from "./theme";
 import { ConnectComputer, ConnectionsDialog, CreateBotDialog } from "./dialogs";
 import { Settings } from "./settings";
 import { Routines } from "./routines";
@@ -19,6 +19,7 @@ import { useLabora } from "./use-labora";
 import { useVoiceInput } from "./voice-input";
 import { AgentPlan, AgentQuestion, QueuedInputs } from "./agent-input";
 import type { DesktopStore } from "./use-labora";
+import { useBubble, type BubbleLauncher } from "./use-bubble";
 
 type Tab = "Details" | "Library" | "Computer";
 
@@ -26,14 +27,16 @@ type Dialog = "none" | "computer" | "bot" | "apps" | "signin" | "settings";
 
 interface AppProps {
   store: DesktopStore;
+  launchBubble?: BubbleLauncher;
 }
 
-export function App({ store }: AppProps) {
+export function App({ store, launchBubble }: AppProps) {
   const labora = useLabora(store);
   const renderer = useGpuixRequired();
   const window = useWindowSize();
   const [tab, setTab] = useState<Tab>("Details");
   const [dialog, setDialog] = useState<Dialog>("none");
+  const bubble = useBubble(store, labora, (signIn) => setDialog(signIn ? "signin" : "none"), launchBubble);
   const [composerMenu, setComposerMenu] = useState(false);
   const [inputMode, setInputMode] = useState<"steer" | "followUp">("steer");
   const [expandedComputer, setExpandedComputer] = useState(false);
@@ -519,9 +522,7 @@ export function App({ store }: AppProps) {
                   icon="plus"
                   onClick={() => setComposerMenu(!composerMenu)}
                   style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 16,
+                    ...composerButtonStyle,
                     backgroundColor: "#414141",
                     flexShrink: 0,
                   }}
@@ -541,11 +542,7 @@ export function App({ store }: AppProps) {
                   minRows={1}
                   maxRows={window.height < 650 ? 4 : 8}
                   style={{
-                    flexGrow: 1,
-                    minWidth: 0,
-                    paddingTop: 4,
-                    paddingBottom: 3,
-                    color: color.text,
+                    ...composerTextStyle,
                     fontFamily: terminalFont,
                     fontSize: 14,
                     lineHeight: 22,
@@ -558,7 +555,7 @@ export function App({ store }: AppProps) {
                     label="Start voice input"
                     icon="mic"
                     onClick={voice.start}
-                    style={{ width: 30, height: 30, borderRadius: 16, flexShrink: 0 }}
+                    style={{ ...composerButtonStyle, flexShrink: 0 }}
                   />
                 ) : null}
                 {labora.busy ? (
@@ -567,7 +564,7 @@ export function App({ store }: AppProps) {
                     label="Stop response"
                     icon="stop"
                     onClick={() => labora.attempt(labora.cancel())}
-                    style={{ width: 30, height: 30, borderRadius: 16, backgroundColor: "#eeeeee" }}
+                    style={{ ...composerButtonStyle, backgroundColor: "#eeeeee" }}
                   />
                 ) : null}
                 {!labora.busy || labora.draft.text.trim() || labora.draft.paths.length ? (
@@ -576,7 +573,7 @@ export function App({ store }: AppProps) {
                     label={labora.busy ? inputMode === "steer" ? "Send task update" : "Queue follow-up" : "Send message"}
                     icon="send"
                     onClick={() => labora.attempt(sendMessage())}
-                    style={{ width: 30, height: 30, borderRadius: 16, backgroundColor: recording ? "#555555" : "#eeeeee" }}
+                    style={{ ...composerButtonStyle, backgroundColor: recording ? "#555555" : "#eeeeee" }}
                   />
                 ) : null}
               </div>
@@ -738,7 +735,7 @@ export function App({ store }: AppProps) {
         <ConnectionsDialog labora={labora} signInRequired={dialog === "signin"} close={() => setDialog("none")} />
       ) : null}
       {dialog === "settings" ? (
-        <Settings labora={labora} close={() => setDialog("none")} connectComputer={() => setDialog("computer")} connectApps={() => setDialog("apps")} />
+        <Settings labora={labora} bubble={bubble} close={() => setDialog("none")} connectComputer={() => setDialog("computer")} connectApps={() => setDialog("apps")} />
       ) : null}
     </div>
   );
