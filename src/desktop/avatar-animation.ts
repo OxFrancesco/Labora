@@ -23,9 +23,12 @@ interface Subscription {
   animation: AvatarAnimation;
   started: number;
   due: number;
+  sampled: number;
   previous: string;
   pointer: PointerPose;
 }
+
+const pointerFrameInterval = 1_000 / 60;
 
 const subscriptions = new Set<Subscription>();
 
@@ -39,8 +42,10 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 
 let ticking = false;
 
+let scheduledAt = Infinity;
+
 function schedule() {
-  if (timer || ticking || !subscriptions.size) return;
+  if (ticking || !subscriptions.size) return;
   const now = performance.now();
   let next = environmentDue;
 
@@ -48,10 +53,17 @@ function schedule() {
     if (!subscription.previous || environment.applicationActive) next = Math.min(next, subscription.due);
   }
 
+  const delay = Math.max(1, Math.min(1_000, next - now));
+
+  if (timer && scheduledAt <= now + delay) return;
+
+  if (timer) clearTimeout(timer);
+  scheduledAt = now + delay;
   timer = setTimeout(() => {
     timer = undefined;
+    scheduledAt = Infinity;
     void tick();
-  }, Math.max(16, Math.min(1_000, next - now)));
+  }, delay);
 }
 
 async function paint(subscription: Subscription, now: number) {
@@ -60,13 +72,15 @@ async function paint(subscription: Subscription, now: number) {
   const pose = avatarPose(animation.activity, elapsed, environment.reducedMotion, animation.small);
   const pointer = environment.reducedMotion ? null : animation.pointer();
 
-  subscription.pointer.yaw += ((pointer?.yaw ?? 0) - subscription.pointer.yaw) * 0.4;
-  subscription.pointer.pitch += ((pointer?.pitch ?? 0) - subscription.pointer.pitch) * 0.4;
-  pose.yaw += Math.round(subscription.pointer.yaw * 100) / 100;
-  pose.pitch += Math.round(subscription.pointer.pitch * 100) / 100;
+  const follow = 1 - Math.exp(-Math.min(100, now - subscription.sampled) / 35);
+  subscription.sampled = now;
+  subscription.pointer.yaw += ((pointer?.yaw ?? 0) - subscription.pointer.yaw) * follow;
+  subscription.pointer.pitch += ((pointer?.pitch ?? 0) - subscription.pointer.pitch) * follow;
+  pose.yaw += Math.round(subscription.pointer.yaw * 10_000) / 10_000;
+  pose.pitch += Math.round(subscription.pointer.pitch * 10_000) / 10_000;
   const key = JSON.stringify(pose);
   const movingPointer = pointer || Math.abs(subscription.pointer.yaw) > 0.005 || Math.abs(subscription.pointer.pitch) > 0.005;
-  const interval = environment.reducedMotion ? Infinity : movingPointer ? 50 : avatarFrameInterval(animation.activity, animation.small, elapsed);
+  const interval = environment.reducedMotion ? Infinity : movingPointer ? pointerFrameInterval : avatarFrameInterval(animation.activity, animation.small, elapsed);
   subscription.due = now + interval;
 
   if (subscription.previous === key) return;
@@ -135,6 +149,7 @@ export function animateAvatar(animation: AvatarAnimation) {
     animation,
     started: performance.now() - (animation.settled ? 1_000 : 0),
     due: 0,
+    sampled: performance.now() - pointerFrameInterval,
     previous: "",
     pointer: { yaw: 0, pitch: 0 },
   };
@@ -144,10 +159,8 @@ export function animateAvatar(animation: AvatarAnimation) {
 
   return {
     wake() {
-      subscription.due = 0;
+      subscription.due = Math.min(subscription.due, Math.max(performance.now(), subscription.sampled + pointerFrameInterval));
 
-      if (timer) clearTimeout(timer);
-      timer = undefined;
       schedule();
     },
     stop() {

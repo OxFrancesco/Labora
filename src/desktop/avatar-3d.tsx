@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useGpuixRequired } from "@gpuix/react";
 import type { ImgInstance, PublicInstance } from "@gpuix/react";
 import { avatarPreview } from "./avatar-preview";
+import { avatarDiagnostics } from "./avatar-diagnostics";
 import { animateAvatar } from "./avatar-animation";
 import { avatarActivityLabels } from "./avatar-motion";
 import type { AvatarActivity } from "./avatar-motion";
@@ -58,6 +59,8 @@ export function Avatar3D({ modelPath, name, size, interactive = false, activity 
         if (!image.current) return;
         image.current.setImagePixels(frame.width, frame.height, frame.pixels);
 
+        if (avatarDiagnostics.hasSubscribers) avatarDiagnostics.publish({ kind: "frame", time: performance.now(), model: modelPath, pixels: frame.pixels });
+
         if (!displayed.current) {
           displayed.current = true;
           setReady(true);
@@ -94,9 +97,11 @@ export function Avatar3D({ modelPath, name, size, interactive = false, activity 
         const bounds = renderer.getElementBounds?.(surface.current.id);
 
         if (!bounds) return;
-        const yaw = Math.round(((event.x - bounds.x) / bounds.width - 0.5) * 8) / 20;
-        const pitch = Math.round(((event.y - bounds.y) / bounds.height - 0.5) * 5) / 20;
+        const yaw = ((event.x - bounds.x) / bounds.width - 0.5) * 0.4;
+        const pitch = ((event.y - bounds.y) / bounds.height - 0.5) * 0.25;
         pointer.current = { yaw, pitch };
+
+        if (avatarDiagnostics.hasSubscribers) avatarDiagnostics.publish({ kind: "pointer", time: performance.now(), model: modelPath });
         animation.current?.wake();
       }}
       onMouseLeave={() => {
