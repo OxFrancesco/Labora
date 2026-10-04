@@ -59,7 +59,7 @@ export function Library({ selected }: { selected: LinkedBot }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flexGrow: 1, gap: 8 }}>
+    <div testId="library" style={{ display: "flex", flexDirection: "column", width: "100%", minWidth: 0, minHeight: 0, flexGrow: 1, gap: 8 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <Button
           id="library-refresh"
@@ -77,17 +77,17 @@ export function Library({ selected }: { selected: LinkedBot }) {
         </Label>
       ) : null}
       {loaded && !files.length ? <Label secondary>No files yet</Label> : null}
-      <div style={{ overflowY: "scroll", flexGrow: 1, minHeight: 0 }}>
+      <div testId="library-files" style={{ display: "flex", flexDirection: "column", width: "100%", minWidth: 0, overflowX: "hidden", overflowY: "scroll", flexGrow: 1, minHeight: 0 }}>
         {files.map((file) => (
           <Button
             key={file.path}
             id={`file-${file.path}`}
-            label={`Save ${file.name}`}
+            label={`Save ${file.path}`}
             onClick={() => {
               void save(file).catch((reason: Error) => setError(reason.message));
             }}
             style={{
-              width: "100%",
+              alignSelf: "stretch",
               justifyContent: "flex-start",
               alignItems: "center",
               gap: 10,
@@ -96,14 +96,13 @@ export function Library({ selected }: { selected: LinkedBot }) {
             }}
           >
             <Icon name="file" size={18} />
-            <div style={{ display: "flex", flexDirection: "column", flexShrink: 1, gap: 3 }}>
-              <Label size={13}>{file.path}</Label>
-              <Label secondary size={11}>
-                {new Intl.NumberFormat(undefined, {
+            <div testId={`file-text-${file.path}`} style={{ display: "flex", flexDirection: "column", flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, gap: 3 }}>
+              <Label size={13} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.path}</Label>
+              <Label secondary size={11} style={{ whiteSpace: "nowrap" }}>
+                {`${new Intl.NumberFormat(undefined, {
                   notation: "compact",
                   maximumFractionDigits: 1,
-                }).format(file.size)}{" "}
-                bytes
+                }).format(file.size)} bytes`}
               </Label>
             </div>
           </Button>
