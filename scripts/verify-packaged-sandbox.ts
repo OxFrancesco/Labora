@@ -76,6 +76,12 @@ const thoughts: EventPayload[] = [];
 
 const history = Promise.withResolvers<string>();
 
+const catalog = Promise.withResolvers<string>();
+
+const githubLink = Promise.withResolvers<string>();
+
+const githubCancelled = Promise.withResolvers<void>();
+
 const lines = createInterface({ input: (await import("node:stream")).Readable.from((async function* () {
   const reader = child.stdout.getReader();
 
@@ -94,8 +100,14 @@ lines.on("line", (line) => {
 
   if (ChildOutput.isAnyOf(["Response"])(output) && output.id === "history") history.resolve(JSON.stringify(output.value));
 
+  if (ChildOutput.isAnyOf(["Response"])(output) && output.id === "catalog") catalog.resolve(JSON.stringify(output.value));
+
   if (!ChildOutput.isAnyOf(["Event"])(output)) return;
   const event = output.payload;
+
+  if (EventPayload.isAnyOf(["AuthLink"])(event) && event.provider === "github") githubLink.resolve(event.url);
+
+  if (EventPayload.isAnyOf(["AuthFailed"])(event) && event.provider === "github") githubCancelled.resolve();
 
   if (EventPayload.isAnyOf(["Message"])(event) && event.message.role === "thinking") thoughts.push(event);
 
@@ -131,6 +143,16 @@ try {
   assert.ok(output.includes("CODEMODE_OK"));
   assert.ok(!output.includes("must-not-reach-shell"));
   assert.ok(!tools.some((event) => EventPayload.isAnyOf(["ToolEnd"])(event) && event.isError));
+  child.stdin.write(JSON.stringify(ChildRequest.make({ id: "catalog", command: ChildCommand.cases.Connectors.make({}) })) + "\n");
+  const marketplace = await catalog.promise;
+
+  for (const name of ["Notion", "Linear", "GitHub", "Granola"]) assert.ok(marketplace.includes(name));
+  child.stdin.write(JSON.stringify(ChildRequest.make({ id: "github-start", command: ChildCommand.cases.AuthStart.make({ provider: "github" }) })) + "\n");
+  const authorization = new URL(await Promise.race([githubLink.promise, new Promise<never>((_, reject) => setTimeout(() => reject(Error("Packaged GitHub OAuth did not start")), 20_000))]));
+  assert.equal(authorization.origin, "https://github.com");
+  assert.equal(authorization.searchParams.get("code_challenge_method"), "S256");
+  child.stdin.write(JSON.stringify(ChildRequest.make({ id: "github-cancel", command: ChildCommand.cases.AuthCancel.make({}) })) + "\n");
+  await githubCancelled.promise;
 } catch (error) { failure = error instanceof Error ? error : new Error(String(error)); }
 finally {
   clearTimeout(timeout);
@@ -145,4 +167,4 @@ finally {
 
 if (failure) throw failure;
 
-console.log("Packaged write/edit/bash/codemode, HTTPS, secret environment isolation and outside-file denial passed.");
+console.log("Packaged write/edit/bash/codemode, HTTPS, secret environment isolation outside-file denial, marketplace catalog, and bundled GitHub OAuth initiation/cancellation passed.");

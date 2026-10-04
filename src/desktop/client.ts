@@ -9,6 +9,7 @@ import type {
   QueueInput,
   UpdateBot,
 } from "../backend/contracts";
+import { ConnectorList, type CustomConnector, type ConnectorChange } from "../backend/connector-contracts";
 import { Computer, PairResponse } from "../computer/contracts";
 import type { Action, ControlRequest } from "../computer/contracts";
 import type { Connection } from "./store";
@@ -182,6 +183,10 @@ export function computerClient(connection: Connection) {
       Schema.decodeUnknownSync(QueuedInputResult)(await (await request(`/v1/bots/${id}/inputs?conversationId=${encodeURIComponent(conversationId)}`, {
         method: "POST", body: JSON.stringify(input),
       })).json()),
+    connectors: async (id: string) =>
+      Schema.decodeUnknownSync(ConnectorList)(await (await request(`/v1/bots/${id}/connectors`)).json()).connectors,
+    addConnector: (id: string, input: CustomConnector) => request(`/v1/bots/${id}/connectors`, { method: "POST", body: JSON.stringify(input) }),
+    changeConnector: (id: string, input: ConnectorChange) => request(`/v1/bots/${id}/connectors`, { method: "PATCH", body: JSON.stringify(input) }),
     auth: async (id: string) =>
       Schema.decodeUnknownSync(AuthStatus)(await (await request(`/v1/bots/${id}/auth`)).json()),
     startAuth: (id: string, provider: AuthStart["provider"]) =>

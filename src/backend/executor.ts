@@ -74,6 +74,8 @@ const State = Schema.Struct({
 });
 
 export interface ExecutorOptions {
+  readonly name?: string;
+  readonly label?: string;
   readonly path: string;
   readonly url: string;
   readonly showLink: (url: string) => void;
@@ -87,7 +89,8 @@ interface CallbackWait {
 
 export async function createExecutor(options: ExecutorOptions) {
   const serverUrl = new URL(options.url).href;
-  const key = `mcp__executor|${serverUrl}`;
+  const label = options.label ?? "Executor";
+  const key = `mcp__${options.name ?? "executor"}|${serverUrl}`;
   const States = Schema.Record(Schema.String, Schema.Json);
 
   const readStates = async () => {
@@ -151,7 +154,7 @@ export async function createExecutor(options: ExecutorOptions) {
         token_endpoint_auth_method: "none",
       },
       onRedirect: (url) => {
-        if (!interactive) throw new Error("Sign in to Executor from this bot's connections.");
+        if (!interactive) throw new Error(`Sign in to ${label} from this bot's connections.`);
         authorization?.(url);
         options.showLink(url.href);
       },
@@ -179,7 +182,7 @@ export async function createExecutor(options: ExecutorOptions) {
         if (tokens?.access_token && tokens.access_token !== context.token) return;
 
         if (!tokens?.refresh_token)
-          throw new Error("Sign in to Executor from this bot's connections.");
+          throw new Error(`Sign in to ${label} from this bot's connections.`);
         await adapted.onUnauthorized?.(context);
       } finally {
         await release();
@@ -188,6 +191,9 @@ export async function createExecutor(options: ExecutorOptions) {
   };
 
   return {
+    async clear() {
+      await store.save({ serverUrl });
+    },
     async status() {
       const state = await store.load();
 
@@ -225,6 +231,8 @@ export async function createExecutor(options: ExecutorOptions) {
           serverUrl: options.url,
           fetch: (url, init) => fetch(url, { ...init, signal }),
         });
+
+        signal.throwIfAborted();
 
         if (result === "AUTHORIZED") return;
         const state = pending.state;

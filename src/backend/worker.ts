@@ -28,6 +28,7 @@ import {
 } from "./contracts";
 import { toolInput, toolOutput } from "../tool-presentation";
 import { createWorkspaceSandbox } from "./sandbox";
+import { createConnectors } from "./connectors";
 import { createExecutor } from "./executor";
 import { createAgentInteractions } from "./interaction";
 import { createPlanTool } from "./plan";
@@ -141,6 +142,14 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       };
       emit(EventPayload.cases.AuthPrompt.make({ provider, message, secret }));
     });
+
+  const connectors = yield* Effect.promise(() => createConnectors({
+    directory: agentDir,
+    showLink: (provider, url) => emit(EventPayload.cases.AuthLink.make({ provider, url, message: "Sign in to connect this app" })),
+    input,
+  }));
+
+  let connectorMutation = false;
 
   const executor = yield* Effect.promise(() =>
     createExecutor({
@@ -353,7 +362,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     noThemes: true,
     noContextFiles: true,
     systemPrompt:
-      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover integrations through Executor. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Workspace bash, read, write and edit run automatically inside an OS sandbox. You may read and change your own workspace and access public websites. Host files, credentials, private networks and system changes are unavailable. Use bash for searching or listing workspace files. Never attempt to escape the sandbox. Connected Executor tools run without per-action permission prompts. They act through the connected account and are outside the local filesystem sandbox. Desktop input outside the sandbox waits for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
+      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover connected apps through searchTools and describeNamespace in code mode. Executor is also available when connected. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Workspace bash, read, write and edit run automatically inside an OS sandbox. You may read and change your own workspace and access public websites. Host files, credentials, private networks and system changes are unavailable. Use bash for searching or listing workspace files. Never attempt to escape the sandbox. Connected app tools run without per-action permission prompts. They act through the connected account and are outside the local filesystem sandbox. Desktop input outside the sandbox waits for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
     extensionFactories: [
       createCodemodeExtension({ mode: "on", models: false }),
       createMcpExtension({
@@ -368,14 +377,21 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
           ],
           errors: [],
         }),
-        createTransport: () => executor.transport(),
+        createTransport: (entry) => entry.name === "executor" ? executor.transport() : connectors.transport(entry.name),
       }),
       (pi) => {
+        connectors.bind(pi);
         pi.on("tool_call", async (event) => {
           if (["grep", "find", "ls", "powershell"].includes(event.toolName))
             return { block: true, reason: "Use the sandboxed bash tool for this operation." };
 
           if (event.toolName.startsWith("mcp__executor__")) return;
+
+          if (event.toolName.startsWith("mcp__")) {
+            if (connectors.allowed(event.toolName)) return;
+
+            return { block: true, reason: "This app is disabled for this agent." };
+          }
 
           if (
             [
@@ -676,6 +692,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   const close = async () => {
     if (closed) return;
     closed = true;
+    await connectors.close();
 
     try {
       cancelAuth();
@@ -739,6 +756,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
       if (provider === "executor") {
         await executor.login(controller.signal);
         executorReloadPending = true;
+      } else if (provider !== "openai") {
+        await connectors.connect(provider, controller.signal);
       } else
         await modelRuntime.login(
           "openai",
@@ -897,13 +916,40 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
 
               return { cancelled: true };
             },
+            Connectors: async () => connectors.list(),
+            ConnectorAdd: async (command) => {
+              if (auth || connectorMutation) throw new Error("Wait for the current connection change to finish.");
+              connectorMutation = true;
+
+              try {
+                await connectors.add(command);
+
+                return { saved: true };
+              } finally {
+                connectorMutation = false;
+              }
+            },
+            ConnectorChange: async (command) => {
+              if (auth || connectorMutation) throw new Error("Wait for the current connection change to finish.");
+              connectorMutation = true;
+
+              try {
+                await connectors.change(command);
+
+                return { saved: true };
+              } finally {
+                connectorMutation = false;
+              }
+            },
             AuthStatus: async () => ({
               openai: modelRuntime.isUsingSubscription("openai") ? "ready" : "signed-out",
               executor: (await executor.status()) ? "ready" : "signed-out",
               active: auth?.provider ?? null,
             }),
             AuthStart: async (command) => {
-              if (auth || (runId && command.provider !== "executor")) throw new Error("This bot is busy.");
+              if (auth || connectorMutation || (runId && command.provider === "openai")) throw new Error("This bot is busy.");
+
+              if (!["openai", "executor"].includes(command.provider) && !connectors.has(command.provider)) throw new Error("Unknown app connection.");
               void startAuth(command.provider);
 
               return { started: true };

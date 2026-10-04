@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, useGpuix, useWindowSize } from "@gpuix/react";
 import type { PublicInstance } from "@gpuix/react";
-import type { Provider } from "../backend/contracts";
 import type { Connection, Preferences } from "./store";
 import type { Labora } from "./use-labora";
 import { Button, Icon, Label } from "./icons";
@@ -58,7 +57,7 @@ function Toggle({ id, label, value, change }: { id: string; label: string; value
   );
 }
 
-function authLabel(labora: Labora, provider: Provider) {
+function authLabel(labora: Labora, provider: "openai" | "executor") {
   if (!labora.auth) return "Unavailable";
 
   if (labora.auth.active === provider) return "Signing in…";

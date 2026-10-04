@@ -58,7 +58,7 @@ const oauth = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 
   if (url.pathname === "/token") return Response.json({ access_token: "isolated-fixture-token", token_type: "Bearer", expires_in: 3600 });
 
-  if (url.pathname === "/mcp") {
+  if (url.pathname.startsWith("/mcp")) {
     if (!request.headers.has("authorization")) return new Response(null, { status: 401, headers: { "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"` } });
 
     if (request.method !== "POST") return new Response(null, { status: 405 });
@@ -80,7 +80,7 @@ const oauth = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
 
 process.env.LABORA_EXECUTOR_URL = `${oauth.url.origin}/mcp`;
 
-const companion = await createComputerHost({ dataDir, name: "Agent controls verification", agentFactory: createAgentHttpHandler, macAppPath: join(workspace, "unavailable/Labora Computer.app") });
+let companion = await createComputerHost({ dataDir, name: "Agent controls verification", agentFactory: createAgentHttpHandler, macAppPath: join(workspace, "unavailable/Labora Computer.app") });
 
 const server = Bun.serve({
   hostname: "127.0.0.1", port: 0, idleTimeout: 0,
@@ -228,7 +228,9 @@ try {
 
   const send = async (text: string) => {
     const next = pending.promise;
+    await waitUntil("marketplace closed", async () => await app.getByTestId("marketplace").count() === 0);
     await app.getByTestId("composer").fill(text);
+    await Bun.sleep(100);
     await app.getByTestId("send").click();
 
     return generation(next);
@@ -307,6 +309,8 @@ try {
   model.text("I am still working on this task.");
   const activeRun = (await snapshot()).activity?.runId;
   await app.getByTestId("sidebar-apps").click();
+  await app.getByTestId("marketplace-search").fill("Executor");
+  await Bun.sleep(150);
   await app.getByTestId("connection-executor").click();
   await waitUntil("Executor OAuth prompt during run", async () => (await client.auth("controls")).active === "executor" && (await snapshot()).pending.some(EventPayload.isAnyOf(["AuthLink"])));
   await capture("03-executor-during-run");
@@ -316,6 +320,8 @@ try {
   assert.equal((await snapshot()).busy, true);
   model.text(" The task continued after cancelling sign-in.");
   await app.getByTestId("sidebar-apps").click();
+  await app.getByTestId("marketplace-search").fill("Executor");
+  await Bun.sleep(150);
   await app.getByTestId("connection-executor").click();
   await waitUntil("second OAuth prompt", async () => (await snapshot()).pending.some(EventPayload.isAnyOf(["AuthLink"])));
   const link = (await snapshot()).pending.find(EventPayload.isAnyOf(["AuthLink"]));
@@ -341,10 +347,94 @@ try {
   assert.equal(await app.getByTestId("approve-tool").count(), 0);
   await complete(model, "Ready. The connected tool returned its result for this task.");
   checks.push("The next task refreshes Executor outside the active generation and calls the connected tool through code mode without approval");
+  await app.getByTestId("sidebar-apps").click();
+  await app.getByTestId("marketplace-notion").waitFor();
+  await capture("06-marketplace");
+  await app.getByTestId("marketplace-search").fill("granola");
+  assert.equal(await app.getByTestId("marketplace-granola").count(), 1);
+  assert.equal(await app.getByTestId("marketplace-notion").count(), 0);
+  await app.getByTestId("marketplace-search").fill("");
+  await app.getByTestId("marketplace-github").click();
+  assert.equal(await app.getByTestId("github-create-token").count(), 0);
+  assert.equal(await app.getByTestId("auth-paste-token").count(), 0);
+  await capture("07-github-browser-sign-in");
+  await app.getByTestId("marketplace-back").click();
+  await app.getByTestId("marketplace-custom").click();
+  await app.getByTestId("connector-name").fill("Verification app");
+  await app.getByTestId("connector-url").fill(`${oauth.url.origin}/mcp/custom`);
+  await app.getByTestId("connector-add").click();
+  await waitUntil("custom connector saved", async () => (await client.connectors("controls")).some((item) => item.name === "Verification app"));
+  const custom = (await client.connectors("controls")).find((item) => item.name === "Verification app")!;
+  await app.getByTestId(`connect-${custom.id}`).waitFor();
+  await capture("08-custom-connector");
+  await app.getByTestId("sheet-close").click();
+  model = await send("Keep working while I connect an official-protocol MCP server.");
+  const marketplaceRun = (await snapshot()).activity?.runId;
+  await app.getByTestId("sidebar-apps").click();
+  await app.getByTestId("marketplace-search").fill("Verification app");
+  await app.getByTestId(`marketplace-${custom.id}`).waitFor();
+  await Bun.sleep(150);
+  await app.getByTestId(`marketplace-${custom.id}`).click();
+  await app.getByTestId(`connect-${custom.id}`).click();
+  await waitUntil("custom OAuth during active run", async () => (await snapshot()).pending.some((event) => EventPayload.isAnyOf(["AuthLink"])(event) && event.provider === custom.id));
+  const customLink = (await snapshot()).pending.find((event) => EventPayload.isAnyOf(["AuthLink"])(event) && event.provider === custom.id);
+  assert.ok(customLink && EventPayload.isAnyOf(["AuthLink"])(customLink));
+  const customAuthorization = new URL(customLink.url);
+  const customCallback = new URL(customAuthorization.searchParams.get("redirect_uri")!);
+  customCallback.searchParams.set("state", customAuthorization.searchParams.get("state")!);
+  customCallback.searchParams.set("code", "fixture-code");
+  assert.ok((await fetch(customCallback)).ok);
+  await waitUntil("verified custom connection", async () => (await client.connectors("controls")).some((item) => item.id === custom.id && item.enabled && item.status === "connected"));
+  assert.equal((await snapshot()).activity?.runId, marketplaceRun);
+  await capture("09-connected-during-run");
+  await app.getByTestId("sheet-close").click();
+  next = pending.promise;
+  model.tool("codemode", { code: `text(await tools.mcp__${custom.id}__fixture_echo({}));` });
+  model = await generation(next);
+  assert.ok(model.input.includes("EXECUTOR_TOOL_OK"), "New MCP tools must be usable in the same run without restarting");
+  await complete(model, "The new app connected and returned a result during this task.");
+  assert.ok(!(await client.connectors("other")).some((item) => item.id === custom.id));
+  await app.getByTestId("sidebar-apps").click();
+  await app.getByTestId("marketplace-search").fill("Verification app");
+  await app.getByTestId(`marketplace-${custom.id}`).waitFor();
+  await Bun.sleep(150);
+  await app.getByTestId(`marketplace-${custom.id}`).click();
+  await app.getByTestId(`toggle-${custom.id}`).click();
+  await waitUntil("paused for this agent", async () => !(await client.connectors("controls")).find((item) => item.id === custom.id)!.enabled);
+  await waitUntil("native pause finished", async () => (await app.getByTestId(`toggle-${custom.id}`).textContent()).includes("Enable"));
+  await Bun.sleep(100);
+  await app.getByTestId("sheet-close").click();
+  model = await send("Verify the paused app is unavailable.");
+  next = pending.promise;
+  model.tool("codemode", { code: `text(await tools.mcp__${custom.id}__fixture_echo({}));` });
+  model = await generation(next);
+  assert.ok(!model.input.slice(model.input.lastIndexOf('Verify the paused app')).includes('EXECUTOR_TOOL_OK'));
+  await complete(model, "The app is paused and cannot be called.");
+  await client.changeConnector("controls", { id: custom.id, action: "enable" });
+  await companion.close();
+  companion = await createComputerHost({ dataDir, name: "Agent controls verification", agentFactory: createAgentHttpHandler, macAppPath: join(workspace, "unavailable/Labora Computer.app") });
+  await restart("connectors");
+  await waitUntil("connector survives restart and verifies again", async () => (await client.connectors("controls")).some((item) => item.id === custom.id && item.enabled && item.status === "connected"));
+  await client.changeConnector("controls", { id: custom.id, action: "disconnect" });
+  assert.equal((await client.connectors("controls")).find((item) => item.id === custom.id)!.status, "disconnected");
+  const authState = await Bun.file(join(agentDir, "mcp-auth.json")).json();
+  assert.equal(authState[`mcp__${custom.id}|${custom.url}`].tokens, undefined);
+  await client.changeConnector("controls", { id: custom.id, action: "remove" });
+  checks.push("Marketplace search, GitHub OAuth-only connection controls, custom OAuth during the same active Pi run, immediate code-mode call, pause enforcement, per-agent isolation, restart persistence, disconnect credential removal and custom removal");
   const { pid } = await app.call("initialize", { protocolVersion: 1, client: "labora-pi-layout" });
   const resize = Bun.spawn(["/usr/bin/osascript", "-e", `tell application "System Events" to tell (first application process whose unix id is ${pid}) to set size of window 1 to {800, 540}`]);
   assert.equal(await resize.exited, 0);
   await Bun.sleep(500);
+  await app.getByTestId("sidebar-apps").click();
+  await app.getByTestId("marketplace-notion").waitFor();
+  await capture("10-marketplace-800");
+  const marketplaceBounds = await app.getByTestId("marketplace").bounds();
+  assert.ok(marketplaceBounds.x >= 0 && marketplaceBounds.x + marketplaceBounds.width <= 800);
+  await app.getByTestId("marketplace-linear").click();
+  await capture("11-linear-800");
+  const connectBounds = await app.getByTestId("connect-linear").bounds();
+  assert.ok(connectBounds.y + connectBounds.height <= 540);
+  await app.getByTestId("sheet-close").click();
   await app.getByTestId("composer").fill("A long draft with enough text to wrap comfortably across several lines without overlapping the send, stop, attachment, or microphone controls. ".repeat(3));
   const row = await app.getByTestId("composer-row").bounds();
   const body = await app.getByTestId("conversation-body").bounds();

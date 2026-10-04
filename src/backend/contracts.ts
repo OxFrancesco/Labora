@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CustomConnector, ConnectorChange } from "./connector-contracts";
 import { PlanState } from "./plan-contracts";
 
 export const BotId = Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9_-]{0,63}$/i));
@@ -7,7 +8,7 @@ export const ConversationId = Schema.String.check(
   Schema.isPattern(/^[a-z0-9][a-z0-9_-]{0,95}$/i),
 );
 
-export const Provider = Schema.Literals(["openai", "executor"]);
+export const Provider = Schema.String.check(Schema.isPattern(/^(openai|executor|notion|linear|github|granola|custom_[a-z0-9]{1,32})$/));
 
 export type Provider = Schema.Schema.Type<typeof Provider>;
 
@@ -252,6 +253,9 @@ export const ChildCommand = Schema.TaggedUnion({
     conversationId: Schema.optionalKey(ConversationId),
     runId: Schema.optionalKey(Schema.String),
   },
+  Connectors: {},
+  ConnectorAdd: CustomConnector.fields,
+  ConnectorChange: ConnectorChange.fields,
   AuthStatus: {},
   AuthStart: { provider: Provider },
   AuthCancel: {},

@@ -1,5 +1,6 @@
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { AgentHost } from "./host";
+import { CustomConnector, ConnectorChange } from "./connector-contracts";
 import { Routines } from "./routines";
 import { CreateRoutine, SetRoutineEnabled, UpdateRoutine } from "./routine-contracts";
 import {
@@ -224,6 +225,21 @@ export async function createAgentHttpHandler(options: AgentHttpOptions): Promise
       const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(QueueInput))(yield* readBody(request)).pipe(Effect.mapError(invalid));
 
       return response(yield* host.request(id, ChildCommand.cases.QueueInput.make({ ...input, conversationId })), 202);
+    }
+
+    if (route === "connectors" && request.method === "GET")
+      return response(yield* host.request(id, ChildCommand.cases.Connectors.make({})));
+
+    if (route === "connectors" && request.method === "POST") {
+      const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CustomConnector))(yield* readBody(request)).pipe(Effect.mapError(invalid));
+
+      return response(yield* host.request(id, ChildCommand.cases.ConnectorAdd.make(input)), 201);
+    }
+
+    if (route === "connectors" && request.method === "PATCH") {
+      const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ConnectorChange))(yield* readBody(request)).pipe(Effect.mapError(invalid));
+
+      return response(yield* host.request(id, ChildCommand.cases.ConnectorChange.make(input)));
     }
 
     if (route === "auth" && request.method === "GET") {

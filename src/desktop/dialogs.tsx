@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWindowSize } from "@gpuix/react";
 import type { ReactNode } from "react";
 import type { Labora } from "./use-labora";
+import { Marketplace } from "./marketplace";
 import { CharacterPicker } from "./characters";
 import { Button, Label } from "./icons";
 import { botColors, color, font } from "./theme";
@@ -13,11 +14,12 @@ interface SheetProps {
   title: string;
   close: () => void;
   children: ReactNode;
+  fullHeight?: boolean;
 }
 
-export function Sheet({ title, close, children }: SheetProps) {
+export function Sheet({ title, close, children, fullHeight = false }: SheetProps) {
   const window = useWindowSize();
-  const width = Math.min(500, window.width - 48);
+  const width = Math.min(fullHeight ? 620 : 500, window.width - 48);
 
   return (
     <anchored deferred priority={100} position={{ x: 0, y: 0 }}>
@@ -40,6 +42,7 @@ export function Sheet({ title, close, children }: SheetProps) {
           style={{
             width,
             maxHeight: window.height - 48,
+            height: fullHeight ? window.height - 48 : undefined,
             overflowY: "scroll",
             display: "flex",
             flexDirection: "column",
@@ -280,8 +283,8 @@ export function ConnectionsDialog({ labora, close, signInRequired = false }: Dia
   );
 
   return (
-    <Sheet title={signInRequired ? "Sign in with ChatGPT" : "Connect apps"} close={close}>
-      <Button
+    <Sheet title={signInRequired ? "Sign in with ChatGPT" : "Marketplace"} fullHeight={!signInRequired} close={close}>
+      {signInRequired ? <Button
         id="connection-openai"
         label="Sign in with ChatGPT"
         onClick={() => { if (labora.auth?.active !== "openai") labora.attempt(labora.signIn("openai")); }}
@@ -289,16 +292,8 @@ export function ConnectionsDialog({ labora, close, signInRequired = false }: Dia
       >
         <Label>{signInRequired ? "Continue with ChatGPT" : "ChatGPT"}</Label>
         <Label secondary>{labora.auth?.active === "openai" ? "Signing in…" : labora.auth?.openai === "ready" ? "Connected" : signInRequired ? "" : "Sign in"}</Label>
-      </Button>
-      {!signInRequired ? <Button
-        id="connection-executor"
-        label="Connect Executor"
-        onClick={() => { if (labora.auth?.active !== "executor") labora.attempt(labora.signIn("executor")); }}
-        style={{ justifyContent: "space-between", padding: 12, backgroundColor: color.surface }}
-      >
-        <Label>Executor</Label>
-        <Label secondary>{labora.auth?.active === "executor" ? "Connecting…" : labora.auth?.executor === "ready" ? "Connected" : "Connect"}</Label>
       </Button> : null}
+      {!signInRequired ? <Marketplace key={target?.key} labora={labora} /> : null}
       {labora.authLink ? (
         <Button
           id="open-auth-link"
@@ -331,6 +326,7 @@ export function ConnectionsDialog({ labora, close, signInRequired = false }: Dia
           </Button>
         </>
       ) : null}
+      {labora.auth?.active ? <Button id="auth-cancel" label="Cancel sign-in" onClick={() => labora.attempt(labora.cancelAuth(target))}><Label>Cancel sign-in</Label></Button> : null}
       {labora.error ? <Label style={{ color: color.error }}>{labora.error}</Label> : null}
     </Sheet>
   );

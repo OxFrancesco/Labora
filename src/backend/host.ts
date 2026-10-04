@@ -691,7 +691,7 @@ export const layer = (options: HostOptions) =>
             ? "auth"
             : undefined;
 
-        if (activity && (ChildCommand.isAnyOf(["AuthStart"])(command) && command.provider === "executor"
+        if (activity && (ChildCommand.isAnyOf(["AuthStart"])(command) && command.provider !== "openai"
           ? worker.activity.has("auth")
           : worker.activity.size > 0))
           return yield* Effect.fail(new BackendError({

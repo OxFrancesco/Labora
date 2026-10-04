@@ -29,6 +29,8 @@ await run([process.execPath, "run", "typecheck"]);
 
 await run([process.execPath, "run", "lint"]);
 
+await run([process.execPath, "scripts/prepare-github-mcp.ts"]);
+
 await run([process.execPath, "scripts/computer-build-macos.ts"]);
 
 await run([process.execPath, "scripts/build-desktop-helper.ts"]);
@@ -90,6 +92,7 @@ process.env.LABORA_COMPUTER_APP ??= join(macos, "../Helpers/Labora Computer.app"
 process.env.LABORA_DESKTOP_HELPER = join(macos, "labora-desktop");
 process.env.LABORA_AVATAR_HELPER = join(macos, "labora-avatar");
 process.env.LABORA_VOICE_HELPER = join(macos, "labora-voice");
+process.env.LABORA_GITHUB_MCP_HELPER = join(macos, "github-mcp-server");
 if (process.argv.includes("--computer")) {
   await import(${JSON.stringify(join(root, "scripts/computer-serve.ts"))});
 } else if (process.argv.includes("--agent-worker")) {
@@ -149,6 +152,8 @@ await copyFile(join(dist, "labora-avatar"), join(macos, "labora-avatar"));
 
 await copyFile(join(dist, "labora-voice"), join(macos, "labora-voice"));
 
+await copyFile(join(root, "artifacts/github-mcp/github-mcp-server"), join(macos, "github-mcp-server"));
+
 await run(["/usr/bin/strip", "-x", nativeLibrary]);
 
 await cp(join(dist, "Labora Computer.app"), join(helpers, "Labora Computer.app"), { recursive: true });
@@ -187,6 +192,7 @@ for (const [source, target] of [
   ["node_modules/react/LICENSE", "React-LICENSE"],
   ["assets/licenses/Pi-LICENSE", "Pi-LICENSE"],
   ["assets/licenses/T3-Code-LICENSE", "T3-Code-LICENSE"],
+  ["assets/licenses/GitHub-MCP-LICENSE", "GitHub-MCP-LICENSE"],
   ["node_modules/effect/LICENSE", "Effect-LICENSE"],
 ] as const) {
   await copyFile(join(root, source), join(resources, "Licenses", target));
@@ -242,6 +248,8 @@ async function sign(path: string, runtimeEntitlements?: string): Promise<void> {
 }
 
 await sign(nativeLibrary);
+
+await sign(join(macos, "github-mcp-server"));
 
 await sign(join(macos, "labora-desktop"));
 

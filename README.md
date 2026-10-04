@@ -113,3 +113,13 @@ bun run agent check
 `check` invokes Executor through embedded Pi and searches the connected Cloudflare Docs integration. It proves an upstream read, independently of model inference. CLI state is under `.labora/bots/<id>`; choose the bot with `LABORA_BOT_ID` and its root with `LABORA_DATA_DIR`.
 
 See [verification evidence](verification/README.md), [implementation progress](docs/implementation-plan.md), and [research](research/README.md) for what has actually been checked and what remains open.
+
+## App marketplace
+
+Open **Apps** to find Notion, Linear, GitHub, Granola, Executor, or add a custom remote MCP server. Connections belong to the selected agent. Search, connect, pause, reconnect, and disconnect are available while the agent runs. New servers register with Pi immediately and remain discoverable through code mode; a connection is marked ready only after MCP initialization and tool discovery succeed.
+
+Notion, Linear, Granola, and custom authenticated servers use browser OAuth with PKCE. Custom servers can also require no sign-in. Credentials live outside the agent workspace in its private `mcp-auth.json`; configuration is stored separately in `connectors.json`. Disconnect clears the local authorization and closes active transports. To revoke an authorization at the provider, use that provider's connected-app settings.
+
+GitHub browser sign-in uses the official GitHub MCP server, release **1.14.0**, bundled in the macOS app after archive SHA-256 verification. There is no token-entry flow. The helper keeps OAuth credentials in memory and refreshes them during its lifetime. Restarting the companion requires GitHub sign-in again. It launches only when the user clicks Connect; a model tool call cannot start browser authentication. Each agent owns its own helper session. The helper's license is included in the app.
+
+`bun scripts/verify-pi-sandbox.ts --source` checks the native marketplace, isolated OAuth callback, same-run MCP discovery and tool execution, pause enforcement, per-agent isolation, restart persistence, disconnect cleanup, and the 800×540 layout. Without `--source`, it drives the packaged UI against an isolated source companion. These controlled provider checks are separate from authorizing real personal accounts.
