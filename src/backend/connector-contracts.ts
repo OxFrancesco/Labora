@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-export const ConnectorId = Schema.String.check(Schema.isPattern(/^(notion|linear|github|granola|raindrop|custom_[a-z0-9]{1,32})$/));
+export const ConnectorId = Schema.String.check(Schema.isPattern(/^(notion|linear|github|granola|raindrop|ocu|custom_[a-z0-9]{1,32})$/));
 
 export const ConnectorAuth = Schema.Literals(["oauth", "none"]);
 
@@ -9,6 +9,7 @@ export const CustomConnector = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(60)),
   url: Schema.String.check(Schema.isMaxLength(2048)),
   auth: ConnectorAuth,
+  transport: Schema.optional(Schema.Literals(["http", "stdio"])),
 });
 
 export interface CustomConnector extends Schema.Schema.Type<typeof CustomConnector> {}
@@ -31,6 +32,7 @@ export interface Connector extends Schema.Schema.Type<typeof Connector> {}
 export const ConnectorList = Schema.Struct({ connectors: Schema.Array(Connector) });
 
 export const officialConnectors = [
+  { id: "ocu", name: "Open Computer Use", url: "", auth: "none", transport: "stdio", description: "Use apps on this agent's Mac", docs: "https://github.com/iFurySt/open-codex-computer-use" },
   { id: "notion", name: "Notion", url: "https://mcp.notion.com/mcp", auth: "oauth", description: "Pages, databases, and workspace search", docs: "https://developers.notion.com/guides/mcp/get-started-with-mcp" },
   { id: "linear", name: "Linear", url: "https://mcp.linear.app/mcp", auth: "oauth", description: "Issues, projects, and team planning", docs: "https://linear.app/docs/mcp" },
   { id: "github", name: "GitHub", url: "https://api.githubcopilot.com/mcp/", auth: "oauth", description: "Repositories, issues, and pull requests", docs: "https://github.com/github/github-mcp-server" },

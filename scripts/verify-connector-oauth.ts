@@ -15,6 +15,7 @@ await mkdir(evidence, { recursive: true });
 
 try {
   for (const entry of officialConnectors) {
+    if (entry.auth !== "oauth") continue;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25_000);
     let observed = false;

@@ -297,6 +297,28 @@ try {
   assert.ok(trace.some((item) => item.phase === "working"));
   checks.push("Workspace write runs automatically inside the sandbox");
 
+  if (process.argv.includes("--ocu")) {
+    await client.startAuth("one", "ocu");
+
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if ((await client.connectors("one")).find((item) => item.id === "ocu")?.enabled) break;
+      await Bun.sleep(100);
+    }
+
+    assert.equal((await client.connectors("one")).find((item) => item.id === "ocu")?.enabled, true);
+    const computerAction = await nextGeneration("Verify approval for an OCU call through code mode. Deny the action.");
+    computerAction.tool("codemode", { code: 'await tools.mcp__ocu__click({ app: "org.buddytools.LaboraOcuFixture", element_index: "0" });' });
+    await waitFor(() => events.some((event) => EventPayload.isAnyOf(["ApprovalRequested"])(event.payload) && event.payload.toolName === "mcp__ocu__click"));
+    const approval = (await client.messages("one")).pending.find(EventPayload.isAnyOf(["ApprovalRequested"]));
+    assert.ok(approval);
+    assert.equal(approval.toolName, "mcp__ocu__click");
+    await client.approve("one", approval.requestId, "deny");
+    await waitFor(() => activity.phase === "cancelled");
+    await client.changeConnector("one", { id: "ocu", action: "disable" });
+    checks.push("OCU input invoked through code mode reaches the real Pi approval gate; denial cancels the run before dispatch");
+  }
+
+
   const deniedTool = await nextGeneration("Request a write outside the workspace.");
   const deniedReply = awaitingGeneration.promise;
   deniedTool.tool("write", { path: join(dataDir, "denied-fixture.txt"), content: "Must not be written" });

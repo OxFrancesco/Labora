@@ -1,0 +1,36 @@
+--- a/apps/OpenComputerUse/Sources/OpenComputerUse/OpenComputerUseMain.swift
++++ b/apps/OpenComputerUse/Sources/OpenComputerUse/OpenComputerUseMain.swift
+@@ -25,6 +25,16 @@
+     @MainActor
+     private static func run() throws {
+         let arguments = Array(CommandLine.arguments.dropFirst())
++
++        if arguments == ["--labora-permissions"] {
++            let permissions = PermissionDiagnostics.current()
++            let data = try JSONSerialization.data(withJSONObject: [
++                "accessibility": permissions.accessibilityTrusted,
++                "screenRecording": permissions.screenCaptureGranted,
++            ])
++            print(String(decoding: data, as: UTF8.self))
++            return
++        }
+
+         if MacOSAppAgentProxy.isAgentInvocation(arguments: arguments) {
+             try MacOSAppAgentProxy.runAgent(arguments: arguments)
+--- a/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/Permissions.swift
++++ b/packages/OpenComputerUseKit/Sources/OpenComputerUseKit/Permissions.swift
+@@ -108,10 +108,10 @@
+ }
+
+ public enum PermissionSupport {
+-    public static let bundleDisplayName = "Open Computer Use"
+-    public static let bundleIdentifier = "com.ifuryst.opencomputeruse"
+-    public static let developmentBundleDisplayName = "Open Computer Use (Dev)"
+-    public static let developmentBundleIdentifier = "com.ifuryst.opencomputeruse.dev"
++    public static let bundleDisplayName = "Labora Open Computer Use"
++    public static let bundleIdentifier = "org.buddytools.LaboraOpenComputerUse"
++    public static let developmentBundleDisplayName = "Labora Open Computer Use (Dev)"
++    public static let developmentBundleIdentifier = "org.buddytools.LaboraOpenComputerUse.dev"
+     private static let releaseAppBundleName = "\(bundleDisplayName).app"
+     private static let developmentAppBundleName = "\(developmentBundleDisplayName).app"
+     private static let appVariantInfoKey = "OpenComputerUseAppVariant"

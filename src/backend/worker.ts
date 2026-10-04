@@ -362,7 +362,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
     noThemes: true,
     noContextFiles: true,
     systemPrompt:
-      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover connected apps through searchTools and describeNamespace in code mode. Executor is also available when connected. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Workspace bash, read, write and edit run automatically inside an OS sandbox. You may read and change your own workspace and access public websites. Host files, credentials, private networks and system changes are unavailable. Use bash for searching or listing workspace files. Never attempt to escape the sandbox. Connected app tools run without per-action permission prompts. They act through the connected account and are outside the local filesystem sandbox. Desktop input outside the sandbox waits for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
+      "You are Labora, a personal agent. Use the selected computer only through its computer tools. File and terminal tools run in your agent workspace. Discover connected apps through searchTools and describeNamespace in code mode. Executor is also available when connected. Use ask_user when a user's answer is needed; do not guess missing answers. Steering messages redirect your current task; follow-up messages are delivered when the current work is done. Workspace bash, read, write and edit run automatically inside an OS sandbox. You may read and change your own workspace and access public websites. Host files, credentials, private networks and system changes are unavailable. Use bash for searching or listing workspace files. Never attempt to escape the sandbox. Connected app tools run without per-action permission prompts. They act through the connected account and are outside the local filesystem sandbox. Open Computer Use runs on the selected agent computer. Its clicks, typing, scrolling, and other input require approval. Inspect the target app before acting, keep actions sequential, and inspect again after a cancelled or failed action. Never replay a cancelled action automatically. Desktop input outside the sandbox waits for a human decision. Never approve your own requests or bypass an approval. Report errors honestly.",
     extensionFactories: [
       createCodemodeExtension({ mode: "on", models: false }),
       createMcpExtension({
@@ -388,9 +388,9 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
           if (event.toolName.startsWith("mcp__executor__")) return;
 
           if (event.toolName.startsWith("mcp__")) {
-            if (connectors.allowed(event.toolName)) return;
+            if (!connectors.allowed(event.toolName)) return { block: true, reason: "This app is disabled for this agent." };
 
-            return { block: true, reason: "This app is disabled for this agent." };
+            if (!event.toolName.startsWith("mcp__ocu__") || ["mcp__ocu__list_apps", "mcp__ocu__get_app_state"].includes(event.toolName)) return;
           }
 
           if (
@@ -428,7 +428,7 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
             );
           });
 
-          if (!approved) cancelledRunId = runId;
+          if (!approved) void cancel();
 
           return approved
             ? undefined
@@ -484,6 +484,8 @@ const initialize = Effect.fn("AgentWorker.initialize")(function* () {
   };
 
   const bindSession = () => activeSession.subscribe((event) => {
+    if (event.type === "agent_end") void connectors.turnEnded();
+
     if (event.type === "queue_update") interactions.queueChanged(event.steering, event.followUp);
 
     if (event.type === "compaction_start" && runId)

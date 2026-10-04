@@ -16,5 +16,6 @@ folder to gather information, feedback, patterns, and templates before writing c
 - `resources/sandbox-runtime` — Official OS sandbox runtime and platform policies for automatic agent tools
 - `resources/t3code` — Official T3 Code source for agent thinking, tool calls, activity timelines, and interaction components
 - `resources/github-mcp-server` — Official GitHub MCP server and browser OAuth sign-in
+- `resources/open-codex-computer-use` — Open Computer Use MCP server and native macOS computer-control implementation
 
 <!-- codeview:end -->

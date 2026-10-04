@@ -490,6 +490,7 @@ export const layer = (options: HostOptions) =>
           "LC_ALL",
           "LABORA_OPENAI_MODEL",
           "LABORA_EXECUTOR_URL",
+          "LABORA_OCU_HELPER",
           "PI_PACKAGE_DIR",
           "LABORA_PACKAGED",
         ]) {

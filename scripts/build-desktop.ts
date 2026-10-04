@@ -32,6 +32,8 @@ await run([process.execPath, "run", "lint"]);
 
 await run([process.execPath, "scripts/prepare-github-mcp.ts"]);
 
+await run([process.execPath, "scripts/build-ocu.ts"]);
+
 await run([process.execPath, "scripts/computer-build-macos.ts"]);
 
 await run([process.execPath, "scripts/build-desktop-helper.ts"]);
@@ -95,6 +97,7 @@ process.env.LABORA_COMPUTER_APP ??= join(macos, "../Helpers/Labora Computer.app"
 process.env.LABORA_DESKTOP_HELPER = join(macos, "labora-desktop");
 process.env.LABORA_AVATAR_HELPER = join(macos, "labora-avatar");
 process.env.LABORA_VOICE_HELPER = join(macos, "labora-voice");
+process.env.LABORA_OCU_HELPER = join(macos, "../Helpers/Labora Open Computer Use.app/Contents/MacOS/OpenComputerUse");
 process.env.LABORA_GITHUB_MCP_HELPER = join(macos, "github-mcp-server");
 if (process.argv.includes("--computer")) {
   await import(${JSON.stringify(join(root, "scripts/computer-serve.ts"))});
@@ -118,6 +121,7 @@ if (process.argv.includes("--computer")) {
         if (!existsSync(join(resources, "characters3d", name + "." + extension))) throw new Error("Missing bundled 3D character: " + name + "." + extension);
       }
     }
+    if (!existsSync(process.env.LABORA_OCU_HELPER)) throw new Error("Open Computer Use helper missing");
     if (!existsSync(process.env.LABORA_COMPUTER_APP)) throw new Error("Computer helper missing");
     if (!existsSync(process.env.LABORA_DESKTOP_HELPER)) throw new Error("Clipboard helper missing");
     if (!existsSync(process.env.LABORA_AVATAR_HELPER)) throw new Error("3D avatar renderer missing");
@@ -163,6 +167,8 @@ await copyFile(join(dist, "labora-voice"), join(macos, "labora-voice"));
 await copyFile(join(root, "artifacts/github-mcp/github-mcp-server"), join(macos, "github-mcp-server"));
 
 await run(["/usr/bin/strip", "-x", nativeLibrary]);
+
+await cp(join(dist, "Labora Open Computer Use.app"), join(helpers, "Labora Open Computer Use.app"), { recursive: true });
 
 await cp(join(dist, "Labora Computer.app"), join(helpers, "Labora Computer.app"), { recursive: true });
 

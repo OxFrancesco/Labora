@@ -3,6 +3,7 @@ import { rename, writeFile } from "node:fs/promises";
 import { Schema } from "effect";
 import { McpClient, StreamableHttpTransport, type McpTransport } from "@earendil-works/pi-mcp";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createOcuConnector, ocuExecutable } from "./ocu-connector";
 import { createGitHubConnector } from "./github-connector";
 import { createExecutor } from "./executor";
 import { Connector, CustomConnector, officialConnectors, type ConnectorChange } from "./connector-contracts";
@@ -31,6 +32,7 @@ export function connectorUrl(value: string) {
 }
 
 export async function createConnectors(options: ConnectorOptions) {
+  const ocu = createOcuConnector(options.directory);
   const github = createGitHubConnector(options.directory, (url) => options.showLink("github", url));
   const path = join(options.directory, "connectors.json");
   const stored = await Bun.file(path).exists() ? Schema.decodeUnknownSync(Schema.fromJsonString(Saved))(await Bun.file(path).text()) : [];
@@ -46,7 +48,7 @@ export async function createConnectors(options: ConnectorOptions) {
 
   for (const item of stored) {
     const official = officialConnectors.find((entry) => entry.id === item.id);
-    entries.set(item.id, { ...item, ...official, url: connectorUrl(official?.url ?? item.url) });
+    entries.set(item.id, { ...item, ...official, url: item.id === "ocu" ? "" : connectorUrl(official?.url ?? item.url) });
   }
 
   const get = (id: string) => {
@@ -88,14 +90,14 @@ export async function createConnectors(options: ConnectorOptions) {
     return created;
   };
 
-  for (const id of entries.keys()) await credential(id);
+  for (const entry of entries.values()) if (entry.auth === "oauth") await credential(entry.id);
 
   const transport = (id: string, probe = false): McpTransport => {
     const entry = get(id);
     const auth = credentials.get(id);
 
-    if (!auth) throw new Error("The connector has not been initialized.");
-    const inner = id === "github" ? github.transport() : entry.auth === "none" ? new StreamableHttpTransport({ url: entry.url }) : auth.transport();
+    if (entry.auth === "oauth" && !auth) throw new Error("The connector has not been initialized.");
+    const inner = id === "ocu" ? ocu.transport() : id === "github" ? github.transport() : entry.auth === "none" ? new StreamableHttpTransport({ url: entry.url }) : auth!.transport();
     const active = transports.get(id) ?? new Set<McpTransport>();
     transports.set(id, active);
     active.add(inner);
@@ -115,11 +117,11 @@ export async function createConnectors(options: ConnectorOptions) {
   const sync = (id: string) => {
     const entry = get(id);
 
-    if (entry.enabled && entry.configured) extension?.registerMcpServer(id, { url: entry.url, exposure: "codemode" });
+    if (entry.enabled && entry.configured) extension?.registerMcpServer(id, id === "ocu" ? { command: ocuExecutable(), args: ["mcp"], exposure: "codemode" } : { url: entry.url, exposure: "codemode" });
     else extension?.unregisterMcpServer(id);
   };
 
-  const check = (id: string, signal = AbortSignal.timeout(15_000)) => {
+  const check = (id: string, signal = AbortSignal.timeout(15_000), onboarding = false) => {
     const pending = pendingChecks.get(id);
 
     if (pending) return pending;
@@ -133,11 +135,18 @@ export async function createConnectors(options: ConnectorOptions) {
 
       try {
         signal.throwIfAborted();
+
+        if (id === "ocu") await ocu.checkPermissions(signal, onboarding);
         await client.connect(transport(id, true));
         await client.listTools({ signal, timeoutMs: 12_000 });
         signal.throwIfAborted();
         states.set(id, { status: "connected", message: "" });
-      } catch {
+      } catch (error) {
+        if (id === "ocu" && error instanceof Error) {
+          states.set(id, { status: "error", message: error.message });
+          throw error;
+        }
+
         states.set(id, { status: "error", message: "Could not reach this app. Check your access, then reconnect." });
         throw new Error("Could not verify the MCP connection. Check your access and server address, then reconnect.");
       } finally {
@@ -156,7 +165,10 @@ export async function createConnectors(options: ConnectorOptions) {
     bind(pi: ExtensionAPI) { extension = pi;
 
  for (const id of entries.keys()) sync(id); },
-    close: () => github.close(),
+    async close() {
+      await Promise.all([github.close(), ocu.close(), ...[...transports.values()].flatMap((items) => [...items].map((item) => item.close()))]);
+    },
+    turnEnded: () => ocu.turnEnded(),
     has: (id: string) => entries.has(id),
     allowed: (name: string) => [...entries.values()].some((item) => item.enabled && item.configured && name.startsWith(`mcp__${item.id}__`)),
     transport: (id: string) => transport(id),
@@ -179,6 +191,8 @@ export async function createConnectors(options: ConnectorOptions) {
       if (!input.id.startsWith("custom_") || entries.has(input.id)) throw new Error("Choose a new custom connector.");
 
       if (entries.size >= 36) throw new Error("Remove an unused custom connector before adding another.");
+
+      if (input.transport === "stdio") throw new Error("Custom connectors must use an HTTP server.");
       const url = connectorUrl(input.url);
 
       if ([...entries.values()].some((entry) => entry.url === url)) throw new Error("This server is already in your marketplace.");
@@ -189,11 +203,10 @@ export async function createConnectors(options: ConnectorOptions) {
     async connect(id: string, signal: AbortSignal) {
       const entry = get(id);
       await pendingChecks.get(id)?.catch(() => undefined);
-      const auth = await credential(id);
 
       if (id === "github") await github.login(signal);
-      else if (entry.auth === "oauth") await auth.login(signal);
-      await check(id, signal);
+      else if (entry.auth === "oauth") await (await credential(id)).login(signal);
+      await check(id, signal, true);
       entry.configured = true;
       entry.enabled = true;
       await save();
@@ -216,7 +229,8 @@ export async function createConnectors(options: ConnectorOptions) {
 
         if (change.action === "disconnect" || change.action === "remove") {
           if (entry.id === "github") await github.close();
-          await (await credential(entry.id)).clear();
+
+          if (entry.auth === "oauth") await (await credential(entry.id)).clear();
           entry.configured = false;
           states.delete(entry.id);
         }

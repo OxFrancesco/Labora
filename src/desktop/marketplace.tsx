@@ -97,6 +97,7 @@ export function Marketplace({ labora }: { labora: Labora }) {
     {item ? <>
       <Label size={20}>{item.name}</Label>
       <Label secondary>{item.description}</Label>
+      {item.id === "ocu" ? <Label secondary>Connect opens permission setup on this agent's Mac. Allow Accessibility and Screen Recording for Labora Open Computer Use. Clicks and typing still ask for your approval.</Label> : null}
       {item.id === "github" ? <Label secondary>Sign in through GitHub in your browser. You may need to reconnect after restarting the companion.</Label> : item.id.startsWith("custom_") ? <Label secondary size={12}>{item.url}</Label> : null}
       {item.status === "connected" ? <Label secondary>{item.enabled ? "Enabled for this agent" : "Paused for this agent"}</Label> : null}
       {item.message ? <Label style={{ color: color.error }}>{item.message}</Label> : null}
