@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { launchOcuFixture } from "../../scripts/ocu-fixture";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -189,7 +190,7 @@ const toolOutput = (generation: Generation, callId: string) => {
     type: Schema.optionalKey(Schema.String), call_id: Schema.optionalKey(Schema.String), output: Schema.optionalKey(Schema.Json),
   }))))(generation.input);
 
-  const result = input.find((item) => item.type === "function_call_output" && item.call_id === callId);
+  const result = input.find((item) => ["function_call_output", "custom_tool_call_output"].includes(item.type ?? "") && item.call_id === callId);
   assert.ok(result, `Missing provider tool result for ${callId}`);
 
   return JSON.stringify(result.output);
@@ -306,16 +307,38 @@ try {
     }
 
     assert.equal((await client.connectors("one")).find((item) => item.id === "ocu")?.enabled, true);
-    const computerAction = await nextGeneration("Verify approval for an OCU call through code mode. Deny the action.");
-    computerAction.tool("codemode", { code: 'await tools.mcp__ocu__click({ app: "org.buddytools.LaboraOcuFixture", element_index: "0" });' });
-    await waitFor(() => events.some((event) => EventPayload.isAnyOf(["ApprovalRequested"])(event.payload) && event.payload.toolName === "mcp__ocu__click"));
-    const approval = (await client.messages("one")).pending.find(EventPayload.isAnyOf(["ApprovalRequested"]));
-    assert.ok(approval);
-    assert.equal(approval.toolName, "mcp__ocu__click");
-    await client.approve("one", approval.requestId, "deny");
-    await waitFor(() => activity.phase === "cancelled");
-    await client.changeConnector("one", { id: "ocu", action: "disable" });
-    checks.push("OCU input invoked through code mode reaches the real Pi approval gate; denial cancels the run before dispatch");
+    const fixture = await launchOcuFixture(dataDir);
+
+    try {
+      const eventStart = events.length;
+      const computerAction = await nextGeneration("Inspect the isolated OCU test window and click its counter once.");
+      const actionReply = awaitingGeneration.promise;
+
+      const code = `const state = await tools.mcp__ocu__get_app_state({ app: ${JSON.stringify(fixture.target)} });
+const tree = state.content.filter(part => part.type === "text").map(part => part.text).join("\\n");
+const index = tree.match(/(\\d+) button Increment counter/)?.[1];
+if (!index) throw new Error("Counter button missing: " + tree);
+text(await tools.mcp__ocu__click({ app: ${JSON.stringify(fixture.target)}, element_index: index }));`;
+
+      const callId = computerAction.tool("codemode", { code });
+      const reply = await actionReply;
+      assert.equal(await Bun.file(fixture.countPath).text(), "1", toolOutput(reply, callId));
+      assert.ok(!events.slice(eventStart).some((event) => EventPayload.isAnyOf(["ApprovalRequested"])(event.payload)));
+      reply.text("The counter was clicked once without an approval prompt.");
+      reply.finish();
+      await waitFor(() => activity.phase === "complete");
+      await client.changeConnector("one", { id: "ocu", action: "disable" });
+      const pausedAction = await nextGeneration("Verify the paused OCU connector cannot click the test window.");
+      const pausedReply = awaitingGeneration.promise;
+      const pausedId = pausedAction.tool("codemode", { code: `text(await tools.mcp__ocu__click({ app: ${JSON.stringify(fixture.target)}, element_index: "0" }));` });
+      const pausedResult = await pausedReply;
+      assert.match(toolOutput(pausedResult, pausedId), /does not exist/);
+      assert.equal(await Bun.file(fixture.countPath).text(), "1");
+      pausedResult.text("The paused connector did not dispatch a click.");
+      pausedResult.finish();
+      await waitFor(() => activity.phase === "complete");
+      checks.push("Real OCU snapshot and click through code mode execute without approval; pausing prevents another click");
+    } finally { await fixture.close(); }
   }
 
 

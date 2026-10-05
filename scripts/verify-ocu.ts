@@ -7,6 +7,7 @@ import { createAgentHttpHandler } from "../src/backend/http";
 import { createComputerHost } from "../src/computer/host";
 import { computerClient, pairComputer } from "../src/desktop/client";
 import { openDesktop } from "./desktop-driver";
+import { launchOcuFixture } from "./ocu-fixture";
 
 const workspace = await mkdtemp("/private/tmp/labora-ocu-");
 
@@ -14,27 +15,15 @@ const evidence = resolve("evidence", `ocu-${Date.now()}`);
 
 const profile = join(workspace, "profile");
 
-const fixture = join(workspace, "Labora OCU Fixture.app");
-
-const countPath = join(workspace, "count.txt");
-
 const checks: string[] = [];
-
-const target = "org.buddytools.LaboraOcuFixture";
-
-await mkdir(join(fixture, "Contents/MacOS"), { recursive: true });
 
 await mkdir(profile, { recursive: true });
 
 await mkdir(evidence, { recursive: true });
 
-await Bun.write(join(fixture, "Contents/Info.plist"), `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${target}</string><key>CFBundleName</key><string>Labora OCU Fixture</string><key>CFBundleExecutable</key><string>Fixture</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>`);
+const fixture = await launchOcuFixture(workspace);
 
-const compiler = Bun.spawn(["swiftc", "-parse-as-library", "native/ocu/VerificationFixture.swift", "-o", join(fixture, "Contents/MacOS/Fixture")], { stdout: "inherit", stderr: "inherit" });
-
-assert.equal(await compiler.exited, 0);
-
-const fixtureProcess = Bun.spawn([join(fixture, "Contents/MacOS/Fixture"), countPath], { stdout: "ignore", stderr: "ignore" });
+const { target, countPath } = fixture;
 
 process.env.LABORA_OCU_HELPER = resolve(process.env.LABORA_OCU_HELPER ?? "dist/Labora.app/Contents/Helpers/Labora Open Computer Use.app/Contents/MacOS/OpenComputerUse");
 
@@ -121,8 +110,7 @@ try {
   await registry.close();
   await server.stop(true);
   await host.close();
-  fixtureProcess.kill();
-  await fixtureProcess.exited;
+  await fixture.close();
   await Bun.write(join(evidence, "result.json"), JSON.stringify({ passed: !failure, checks, error: failure instanceof Error ? failure.message : undefined, boundary: "Isolated native fixture, registry, agent, and profile. No unrelated apps manipulated. No live model invocation." }, null, 2));
   await rm(workspace, { recursive: true, force: true });
 }
